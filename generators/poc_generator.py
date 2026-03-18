@@ -4,6 +4,7 @@ PoC生成器 - 自动生成漏洞验证代码
 支持生成curl命令、Python脚本等
 """
 import os
+import re
 import json
 import base64
 from typing import Dict, List, Optional, Any
@@ -405,5 +406,4 @@ if __name__ == "__main__":
         return script
 
 
-# 导入re模块
-import re
+

@@ -72,11 +72,17 @@ class AuditEngine:
         # Step 3: 分析调用链
         print("\n[+] Step 3: 分析调用链...")
         vulnerabilities = []
+        seen_vulns = set()  # 用于去重
         
         if enable_reverse:
             print("    执行反向审计(从Sink到Source)...")
             vulns_reverse = self.call_chain_analyzer.analyze(target_path, sources, sinks)
-            vulnerabilities.extend(vulns_reverse)
+            for vuln in vulns_reverse:
+                vuln_key = (vuln.source.function_name, vuln.sink.function_name, 
+                           vuln.vulnerability_type.value, vuln.sink.line_number)
+                if vuln_key not in seen_vulns:
+                    vulnerabilities.append(vuln)
+                    seen_vulns.add(vuln_key)
             print(f"    反向审计发现 {len(vulns_reverse)} 个漏洞")
         
         if enable_forward:
@@ -84,8 +90,11 @@ class AuditEngine:
             vulns_forward = self._forward_audit(target_path, sources, sinks)
             # 合并结果，避免重复
             for vuln in vulns_forward:
-                if not any(v.id == vuln.id for v in vulnerabilities):
+                vuln_key = (vuln.source.function_name, vuln.sink.function_name,
+                           vuln.vulnerability_type.value, vuln.sink.line_number)
+                if vuln_key not in seen_vulns:
                     vulnerabilities.append(vuln)
+                    seen_vulns.add(vuln_key)
             print(f"    正向审计发现 {len(vulns_forward)} 个漏洞")
         
         result.vulnerabilities = vulnerabilities

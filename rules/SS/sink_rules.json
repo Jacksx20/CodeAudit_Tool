@@ -1,0 +1,397 @@
+{
+    "sql_injection": {
+        "name": "SQL注入",
+        "cwe_id": "CWE-89",
+        "description": "用户输入直接拼接到SQL查询中，可能导致SQL注入漏洞",
+        "severity": "critical",
+        "sinks": [
+            {
+                "function": "execute",
+                "module": "sqlite3",
+                "pattern": "execute\\s*\\(.*\\+.*\\)",
+                "description": "SQLite execute with string concatenation",
+                "remediation": "使用参数化查询: cursor.execute('SELECT * FROM users WHERE id = ?', (user_id,))"
+            },
+            {
+                "function": "execute",
+                "module": "pymysql",
+                "pattern": "execute\\s*\\(.*\\+.*\\)",
+                "description": "MySQL execute with string concatenation",
+                "remediation": "使用参数化查询"
+            },
+            {
+                "function": "raw",
+                "module": "django.db.models",
+                "pattern": "raw\\s*\\(.*%.*\\)",
+                "description": "Django raw SQL query with string formatting",
+                "remediation": "使用Django ORM或参数化查询"
+            },
+            {
+                "function": "extra",
+                "module": "django.db.models",
+                "pattern": "extra\\s*\\(.*select.*\\+.*\\)",
+                "description": "Django extra with raw SQL",
+                "remediation": "避免使用extra，使用ORM方法"
+            },
+            {
+                "function": "cursor.execute",
+                "module": "any",
+                "pattern": "cursor\\.execute\\s*\\(.*%.*\\)",
+                "description": "Cursor execute with string formatting",
+                "remediation": "使用参数化查询"
+            },
+            {
+                "function": "query",
+                "module": "sqlalchemy",
+                "pattern": "text\\s*\\(.*\\+.*\\)",
+                "description": "SQLAlchemy text with concatenation",
+                "remediation": "使用bindparams绑定参数"
+            }
+        ]
+    },
+    "command_injection": {
+        "name": "命令注入",
+        "cwe_id": "CWE-78",
+        "description": "用户输入直接拼接到系统命令中，可能导致命令注入漏洞",
+        "severity": "critical",
+        "sinks": [
+            {
+                "function": "system",
+                "module": "os",
+                "pattern": "os\\.system\\s*\\(.*\\+.*\\)",
+                "description": "os.system with user input",
+                "remediation": "使用subprocess.run并设置shell=False"
+            },
+            {
+                "function": "popen",
+                "module": "os",
+                "pattern": "os\\.popen\\s*\\(.*\\+.*\\)",
+                "description": "os.popen with user input",
+                "remediation": "使用subprocess.Popen并设置shell=False"
+            },
+            {
+                "function": "subprocess.call",
+                "module": "subprocess",
+                "pattern": "subprocess\\.call\\s*\\(.*shell\\s*=\\s*True.*\\)",
+                "description": "subprocess.call with shell=True",
+                "remediation": "设置shell=False并使用列表传参"
+            },
+            {
+                "function": "subprocess.run",
+                "module": "subprocess",
+                "pattern": "subprocess\\.run\\s*\\(.*shell\\s*=\\s*True.*\\)",
+                "description": "subprocess.run with shell=True",
+                "remediation": "设置shell=False并使用列表传参"
+            },
+            {
+                "function": "subprocess.Popen",
+                "module": "subprocess",
+                "pattern": "subprocess\\.Popen\\s*\\(.*shell\\s*=\\s*True.*\\)",
+                "description": "subprocess.Popen with shell=True",
+                "remediation": "设置shell=False并使用列表传参"
+            },
+            {
+                "function": "exec",
+                "module": "builtins",
+                "pattern": "exec\\s*\\(.*\\)",
+                "description": "exec with dynamic code",
+                "remediation": "避免使用exec执行动态代码"
+            },
+            {
+                "function": "eval",
+                "module": "builtins",
+                "pattern": "eval\\s*\\(.*\\)",
+                "description": "eval with dynamic code",
+                "remediation": "避免使用eval执行动态代码"
+            }
+        ]
+    },
+    "path_traversal": {
+        "name": "路径遍历",
+        "cwe_id": "CWE-22",
+        "description": "用户输入直接用于文件路径，可能导致路径遍历漏洞",
+        "severity": "high",
+        "sinks": [
+            {
+                "function": "open",
+                "module": "builtins",
+                "pattern": "open\\s*\\(.*\\+.*\\)",
+                "description": "open with path concatenation",
+                "remediation": "验证并规范化路径，使用os.path.realpath检查"
+            },
+            {
+                "function": "read",
+                "module": "builtins",
+                "pattern": "open\\s*\\(.*request\\..*\\)",
+                "description": "open with request data",
+                "remediation": "验证用户输入，使用白名单"
+            },
+            {
+                "function": "write",
+                "module": "builtins",
+                "pattern": "open\\s*\\(.*\\+.*\\).*write",
+                "description": "write to concatenated path",
+                "remediation": "验证路径，限制写入目录"
+            },
+            {
+                "function": "send_file",
+                "module": "flask",
+                "pattern": "send_file\\s*\\(.*\\+.*\\)",
+                "description": "Flask send_file with concatenation",
+                "remediation": "验证文件路径，使用safe_join"
+            },
+            {
+                "function": "FileResponse",
+                "module": "django.http",
+                "pattern": "FileResponse\\s*\\(.*\\+.*\\)",
+                "description": "Django FileResponse with concatenation",
+                "remediation": "验证文件路径"
+            },
+            {
+                "function": "os.path.join",
+                "module": "os",
+                "pattern": "os\\.path\\.join\\s*\\(.*request\\..*\\)",
+                "description": "os.path.join with user input",
+                "remediation": "检查结果路径是否在预期目录内"
+            }
+        ]
+    },
+    "ssrf": {
+        "name": "服务端请求伪造(SSRF)",
+        "cwe_id": "CWE-918",
+        "description": "用户输入直接用于URL请求，可能导致SSRF漏洞",
+        "severity": "high",
+        "sinks": [
+            {
+                "function": "urlopen",
+                "module": "urllib.request",
+                "pattern": "urlopen\\s*\\(.*request\\..*\\)",
+                "description": "urllib.urlopen with user input",
+                "remediation": "验证URL协议和域名，使用白名单"
+            },
+            {
+                "function": "request",
+                "module": "requests",
+                "pattern": "requests\\.(get|post|put|delete|patch)\\s*\\(.*request\\..*\\)",
+                "description": "requests with user controlled URL",
+                "remediation": "验证URL，限制协议和目标域名"
+            },
+            {
+                "function": "get",
+                "module": "httpx",
+                "pattern": "httpx\\.(get|post)\\s*\\(.*request\\..*\\)",
+                "description": "httpx with user controlled URL",
+                "remediation": "验证URL，使用白名单"
+            },
+            {
+                "function": "urlretrieve",
+                "module": "urllib.request",
+                "pattern": "urlretrieve\\s*\\(.*request\\..*\\)",
+                "description": "urlretrieve with user input",
+                "remediation": "验证URL，限制目标"
+            },
+            {
+                "function": "HTTPConnection.request",
+                "module": "http.client",
+                "pattern": "HTTPConnection.*\\.request\\s*\\(.*request\\..*\\)",
+                "description": "HTTPConnection with user input",
+                "remediation": "验证目标主机"
+            }
+        ]
+    },
+    "xss": {
+        "name": "跨站脚本攻击(XSS)",
+        "cwe_id": "CWE-79",
+        "description": "用户输入未经过滤直接输出到页面，可能导致XSS漏洞",
+        "severity": "high",
+        "sinks": [
+            {
+                "function": "render_template_string",
+                "module": "flask",
+                "pattern": "render_template_string\\s*\\(.*\\+.*\\)",
+                "description": "Flask render_template_string with concatenation",
+                "remediation": "使用render_template或转义用户输入"
+            },
+            {
+                "function": "Markup",
+                "module": "markupsafe",
+                "pattern": "Markup\\s*\\(.*request\\..*\\)",
+                "description": "Markup with unescaped user input",
+                "remediation": "避免使用Markup包装用户输入"
+            },
+            {
+                "function": "safe",
+                "module": "django.utils.safestring",
+                "pattern": "mark_safe\\s*\\(.*request\\..*\\)",
+                "description": "Django mark_safe with user input",
+                "remediation": "使用自动转义或手动转义"
+            },
+            {
+                "function": "HttpResponse",
+                "module": "django.http",
+                "pattern": "HttpResponse\\s*\\(.*\\+.*\\)",
+                "description": "HttpResponse with concatenation",
+                "remediation": "使用模板系统或转义输出"
+            },
+            {
+                "function": "write",
+                "module": "fastapi.responses",
+                "pattern": "Response\\s*\\(.*content.*request\\..*\\)",
+                "description": "Response with user input",
+                "remediation": "转义HTML特殊字符"
+            }
+        ]
+    },
+    "deserialization": {
+        "name": "不安全的反序列化",
+        "cwe_id": "CWE-502",
+        "description": "反序列化不可信数据，可能导致远程代码执行",
+        "severity": "critical",
+        "sinks": [
+            {
+                "function": "loads",
+                "module": "pickle",
+                "pattern": "pickle\\.loads\\s*\\(.*request\\..*\\)",
+                "description": "pickle.loads with user input",
+                "remediation": "使用JSON或其他安全格式"
+            },
+            {
+                "function": "load",
+                "module": "pickle",
+                "pattern": "pickle\\.load\\s*\\(.*request\\..*\\)",
+                "description": "pickle.load with user input",
+                "remediation": "使用JSON或其他安全格式"
+            },
+            {
+                "function": "yaml.load",
+                "module": "yaml",
+                "pattern": "yaml\\.load\\s*\\(.*Loader\\s*=\\s*yaml\\.Loader.*\\)",
+                "description": "yaml.load with unsafe Loader",
+                "remediation": "使用yaml.safe_load"
+            },
+            {
+                "function": "yaml.unsafe_load",
+                "module": "yaml",
+                "pattern": "yaml\\.unsafe_load\\s*\\(.*\\)",
+                "description": "yaml.unsafe_load",
+                "remediation": "使用yaml.safe_load"
+            },
+            {
+                "function": "marshal.loads",
+                "module": "marshal",
+                "pattern": "marshal\\.loads\\s*\\(.*\\)",
+                "description": "marshal.loads with user input",
+                "remediation": "避免使用marshal处理不可信数据"
+            },
+            {
+                "function": "unserialize",
+                "module": "php",
+                "pattern": "unserialize\\s*\\(.*\\$_.*\\)",
+                "description": "PHP unserialize with user input",
+                "remediation": "使用JSON或其他安全格式"
+            }
+        ]
+    },
+    "code_injection": {
+        "name": "代码注入",
+        "cwe_id": "CWE-94",
+        "description": "动态执行用户提供的代码，可能导致代码注入",
+        "severity": "critical",
+        "sinks": [
+            {
+                "function": "exec",
+                "module": "builtins",
+                "pattern": "exec\\s*\\(.*request\\..*\\)",
+                "description": "exec with user input",
+                "remediation": "避免动态执行用户代码"
+            },
+            {
+                "function": "eval",
+                "module": "builtins",
+                "pattern": "eval\\s*\\(.*request\\..*\\)",
+                "description": "eval with user input",
+                "remediation": "避免动态执行用户代码"
+            },
+            {
+                "function": "compile",
+                "module": "builtins",
+                "pattern": "compile\\s*\\(.*request\\..*\\)",
+                "description": "compile with user input",
+                "remediation": "避免动态编译用户代码"
+            },
+            {
+                "function": "__import__",
+                "module": "builtins",
+                "pattern": "__import__\\s*\\(.*request\\..*\\)",
+                "description": "dynamic import with user input",
+                "remediation": "使用静态导入或验证模块名"
+            }
+        ]
+    },
+    "ldap_injection": {
+        "name": "LDAP注入",
+        "cwe_id": "CWE-90",
+        "description": "用户输入直接拼接到LDAP查询中",
+        "severity": "high",
+        "sinks": [
+            {
+                "function": "search_s",
+                "module": "ldap",
+                "pattern": "search_s\\s*\\(.*\\+.*\\)",
+                "description": "LDAP search with concatenation",
+                "remediation": "使用参数化LDAP查询"
+            }
+        ]
+    },
+    "xml_injection": {
+        "name": "XML注入/XXE",
+        "cwe_id": "CWE-611",
+        "description": "解析不可信XML数据，可能导致XXE攻击",
+        "severity": "high",
+        "sinks": [
+            {
+                "function": "parse",
+                "module": "xml.etree.ElementTree",
+                "pattern": "ElementTree\\.parse\\s*\\(.*request\\..*\\)",
+                "description": "XML parse with user input",
+                "remediation": "禁用外部实体解析"
+            },
+            {
+                "function": "fromstring",
+                "module": "xml.etree.ElementTree",
+                "pattern": "fromstring\\s*\\(.*request\\..*\\)",
+                "description": "XML fromstring with user input",
+                "remediation": "禁用外部实体解析"
+            },
+            {
+                "function": "parseString",
+                "module": "xml.dom.minidom",
+                "pattern": "parseString\\s*\\(.*request\\..*\\)",
+                "description": "DOM parseString with user input",
+                "remediation": "禁用外部实体解析"
+            }
+        ]
+    },
+    "open_redirect": {
+        "name": "开放重定向",
+        "cwe_id": "CWE-601",
+        "description": "用户输入直接用于重定向URL",
+        "severity": "medium",
+        "sinks": [
+            {
+                "function": "redirect",
+                "module": "flask",
+                "pattern": "redirect\\s*\\(.*request\\..*\\)",
+                "description": "Flask redirect with user input",
+                "remediation": "验证重定向URL，使用白名单"
+            },
+            {
+                "function": "HttpResponseRedirect",
+                "module": "django.http",
+                "pattern": "HttpResponseRedirect\\s*\\(.*request\\..*\\)",
+                "description": "Django redirect with user input",
+                "remediation": "验证重定向URL"
+            }
+        ]
+    }
+}

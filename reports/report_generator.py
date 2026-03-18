@@ -49,6 +49,9 @@ class ReportGenerator:
     
     def _generate_json(self, result: AuditResult, output_path: str) -> str:
         """生成JSON格式报告"""
+        summary = result.get_summary()
+        
+        # 构建增强版JSON报告
         report_data = {
             'meta': {
                 'tool': 'Code Audit Tool',
@@ -65,10 +68,13 @@ class ReportGenerator:
                 'sinks_found': result.sinks_found,
                 'vulnerabilities_count': len(result.vulnerabilities),
                 'attack_chains_count': len(result.attack_chains),
-                'severity_distribution': result.get_summary()
+                'severity_distribution': summary
             },
             'vulnerabilities': [v.to_dict() for v in result.vulnerabilities],
-            'attack_chains': [ac.to_dict() for ac in result.attack_chains]
+            'attack_chains': [ac.to_dict() for ac in result.attack_chains],
+            'statistics': self._generate_statistics(result),
+            'recommendations': self._generate_recommendations(result),
+            'compliance': self._generate_compliance(result)
         }
         
         # 确保输出路径有正确的扩展名
@@ -77,6 +83,170 @@ class ReportGenerator:
         
         with open(output_path, 'w', encoding='utf-8') as f:
             json.dump(report_data, f, indent=2, ensure_ascii=False)
+        
+        return output_path
+    
+    def _generate_statistics(self, result: AuditResult) -> Dict:
+        """生成统计信息"""
+        summary = result.get_summary()
+        
+        # 计算受影响的文件和函数
+        affected_files = set()
+        affected_functions = set()
+        for vuln in result.vulnerabilities:
+            affected_files.add(vuln.source.file_path)
+            affected_files.add(vuln.sink.file_path)
+            affected_functions.add(vuln.source.function_name)
+            affected_functions.add(vuln.sink.function_name)
+        
+        # 计算匹配率
+        match_rate = 0.0
+        if result.sinks_found > 0:
+            match_rate = (len(result.vulnerabilities) / result.sinks_found) * 100
+        
+        return {
+            'scan_duration': {
+                'total_seconds': result.scan_time,
+                'formatted': f"{result.scan_time:.2f}s"
+            },
+            'file_analysis': {
+                'total': result.total_files,
+                'scanned': result.scanned_files,
+                'skipped': result.total_files - result.scanned_files,
+                'by_extension': self._get_file_extensions(result.target_path)
+            },
+            'vulnerability_metrics': {
+                'total': len(result.vulnerabilities),
+                'by_severity': {
+                    'critical': summary['critical'],
+                    'high': summary['high'],
+                    'medium': summary['medium'],
+                    'low': summary['low'],
+                    'info': summary['info']
+                },
+                'by_type': summary['by_type'],
+                'unique_affected_files': len(affected_files),
+                'unique_affected_functions': len(affected_functions)
+            },
+            'source_sink_analysis': {
+                'sources_found': result.sources_found,
+                'sinks_found': result.sinks_found,
+                'matched_pairs': len(result.vulnerabilities),
+                'match_rate': f"{match_rate:.1f}%"
+            }
+        }
+    
+    def _get_file_extensions(self, target_path: str) -> Dict[str, int]:
+        """获取文件扩展名统计"""
+        extensions = {}
+        if os.path.isfile(target_path):
+            ext = os.path.splitext(target_path)[1].lower()
+            extensions[ext] = 1
+        else:
+            for root, dirs, files in os.walk(target_path):
+                dirs[:] = [d for d in dirs if d not in self.config.exclude_dirs]
+                for file in files:
+                    ext = os.path.splitext(file)[1].lower()
+                    if ext in self.config.supported_extensions:
+                        extensions[ext] = extensions.get(ext, 0) + 1
+        return extensions
+    
+    def _generate_recommendations(self, result: AuditResult) -> List[Dict]:
+        """生成修复建议"""
+        recommendations = []
+        
+        # 按严重程度分组
+        critical_vulns = [v for v in result.vulnerabilities if v.severity.value == 'critical']
+        high_vulns = [v for v in result.vulnerabilities if v.severity.value == 'high']
+        
+        if critical_vulns:
+            recommendations.append({
+                'priority': 'critical',
+                'title': '立即修复严重漏洞',
+                'description': f'发现 {len(critical_vulns)} 个严重漏洞，可能导致远程代码执行或数据泄露',
+                'affected_vulnerabilities': [v.id for v in critical_vulns]
+            })
+        
+        if high_vulns:
+            recommendations.append({
+                'priority': 'high',
+                'title': '优先修复高危漏洞',
+                'description': f'发现 {len(high_vulns)} 个高危漏洞，可能导致敏感信息泄露',
+                'affected_vulnerabilities': [v.id for v in high_vulns]
+            })
+        
+        # 按漏洞类型分组建议
+        vuln_types = {}
+        for vuln in result.vulnerabilities:
+            vtype = vuln.vulnerability_type.value
+            if vtype not in vuln_types:
+                vuln_types[vtype] = []
+            vuln_types[vtype].append(vuln.id)
+        
+        for vtype, vuln_ids in vuln_types.items():
+            recommendations.append({
+                'priority': 'medium',
+                'title': f'修复{vtype}漏洞',
+                'description': self._get_type_recommendation(vtype),
+                'affected_vulnerabilities': vuln_ids
+            })
+        
+        return recommendations
+    
+    def _get_type_recommendation(self, vuln_type: str) -> str:
+        """获取漏洞类型对应的建议"""
+        recommendations = {
+            'sql_injection': '使用参数化查询，避免字符串拼接SQL语句',
+            'command_injection': '避免使用shell=True，使用列表形式传递命令参数',
+            'path_traversal': '验证并规范化文件路径，使用白名单限制可访问文件',
+            'ssrf': '验证URL，使用白名单限制允许访问的域名',
+            'xss': '对用户输入进行HTML转义，使用模板引擎的自动转义功能',
+            'deserialization': '避免反序列化不可信数据，使用JSON等安全格式',
+            'code_injection': '避免动态执行用户代码',
+            'ldap_injection': '使用参数化LDAP查询',
+            'xml_injection': '禁用外部实体解析',
+            'open_redirect': '验证重定向URL，使用白名单'
+        }
+        return recommendations.get(vuln_type, '验证并过滤用户输入')
+    
+    def _generate_compliance(self, result: AuditResult) -> Dict:
+        """生成合规性检查结果"""
+        # OWASP Top 10 映射
+        owasp_mapping = {
+            'sql_injection': 'A03_injection',
+            'command_injection': 'A03_injection',
+            'xss': 'A03_injection',
+            'path_traversal': 'A01_broken_access_control',
+            'ssrf': 'A10_ssrf',
+            'deserialization': 'A08_integrity_failures',
+            'code_injection': 'A03_injection'
+        }
+        
+        owasp_results = {
+            'A01_broken_access_control': False,
+            'A02_cryptographic_failures': False,
+            'A03_injection': False,
+            'A04_insecure_design': False,
+            'A05_security_misconfiguration': False,
+            'A06_vulnerable_components': False,
+            'A07_auth_failures': False,
+            'A08_integrity_failures': False,
+            'A09_logging_failures': False,
+            'A10_ssrf': False
+        }
+        
+        cwe_list = []
+        for vuln in result.vulnerabilities:
+            vtype = vuln.vulnerability_type.value
+            if vtype in owasp_mapping:
+                owasp_results[owasp_mapping[vtype]] = True
+            if vuln.cwe_id and vuln.cwe_id not in cwe_list:
+                cwe_list.append(vuln.cwe_id)
+        
+        return {
+            'owasp_top_10': owasp_results,
+            'cwe_coverage': cwe_list
+        }
         
         return output_path
     

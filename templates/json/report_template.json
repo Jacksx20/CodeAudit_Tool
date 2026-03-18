@@ -1,0 +1,153 @@
+{
+    "meta": {
+        "tool": "{{tool_name}}",
+        "version": "{{version}}",
+        "generated_at": "{{generated_at}}",
+        "target_path": "{{target_path}}",
+        "scan_time": {{scan_time}},
+        "framework": "{{framework}}"
+    },
+    "summary": {
+        "total_files": {{total_files}},
+        "scanned_files": {{scanned_files}},
+        "sources_found": {{sources_found}},
+        "sinks_found": {{sinks_found}},
+        "vulnerabilities_count": {{vulnerabilities_count}},
+        "attack_chains_count": {{attack_chains_count}},
+        "severity_distribution": {
+            "critical": {{critical_count}},
+            "high": {{high_count}},
+            "medium": {{medium_count}},
+            "low": {{low_count}},
+            "info": {{info_count}},
+            "by_type": {{by_type_json}}
+        }
+    },
+    "vulnerabilities": [
+        {
+            "id": "{{vuln_id}}",
+            "name": "{{vuln_name}}",
+            "vulnerability_type": "{{vuln_type}}",
+            "severity": "{{vuln_severity}}",
+            "cwe_id": "{{cwe_id}}",
+            "cvss_score": {{cvss_score}},
+            "source": {
+                "file_path": "{{source_file_path}}",
+                "line_number": {{source_line_number}},
+                "function_name": "{{source_function_name}}",
+                "framework": "{{source_framework}}",
+                "route": "{{source_route}}",
+                "http_method": "{{source_http_method}}",
+                "parameters": {{source_parameters}},
+                "code_snippet": "{{source_code_snippet}}",
+                "decorators": {{source_decorators}},
+                "class_name": {{source_class_name}}
+            },
+            "sink": {
+                "file_path": "{{sink_file_path}}",
+                "line_number": {{sink_line_number}},
+                "function_name": "{{sink_function_name}}",
+                "vulnerability_type": "{{sink_vuln_type}}",
+                "severity": "{{sink_severity}}",
+                "code_snippet": "{{sink_code_snippet}}",
+                "arguments": {{sink_arguments}},
+                "description": "{{sink_description}}",
+                "remediation": "{{sink_remediation}}",
+                "class_name": {{sink_class_name}}
+            },
+            "call_chain": {
+                "source": "{{chain_source}}",
+                "sink": "{{chain_sink}}",
+                "nodes": [
+                    {
+                        "file_path": "{{node_file_path}}",
+                        "line_number": {{node_line_number}},
+                        "function_name": "{{node_function_name}}",
+                        "code_snippet": "{{node_code_snippet}}",
+                        "class_name": {{node_class_name}},
+                        "call_type": "{{node_call_type}}"
+                    }
+                ],
+                "is_complete": {{chain_is_complete}},
+                "data_flow": {{chain_data_flow}}
+            },
+            "poc": {
+                "vulnerability_type": "{{poc_vuln_type}}",
+                "http_method": "{{poc_http_method}}",
+                "url": "{{poc_url}}",
+                "headers": {{poc_headers}},
+                "params": {{poc_params}},
+                "data": {{poc_data}},
+                "payload": "{{poc_payload}}",
+                "expected_result": "{{poc_expected_result}}",
+                "curl_command": "{{poc_curl_command}}",
+                "python_code": "{{poc_python_code}}"
+            },
+            "description": "{{vuln_description}}",
+            "remediation": "{{vuln_remediation}}",
+            "references": {{vuln_references}}
+        }
+    ],
+    "attack_chains": [
+        {
+            "vulnerabilities": {{attack_chain_vulns}},
+            "description": "{{attack_chain_description}}",
+            "impact": "{{attack_chain_impact}}",
+            "steps": {{attack_chain_steps}}
+        }
+    ],
+    "statistics": {
+        "scan_duration": {
+            "total_seconds": {{scan_time}},
+            "formatted": "{{scan_time_formatted}}"
+        },
+        "file_analysis": {
+            "total": {{total_files}},
+            "scanned": {{scanned_files}},
+            "skipped": {{skipped_files}},
+            "by_extension": {{files_by_extension}}
+        },
+        "vulnerability_metrics": {
+            "total": {{vulnerabilities_count}},
+            "by_severity": {
+                "critical": {{critical_count}},
+                "high": {{high_count}},
+                "medium": {{medium_count}},
+                "low": {{low_count}},
+                "info": {{info_count}}
+            },
+            "by_type": {{by_type_json}},
+            "unique_affected_files": {{unique_affected_files}},
+            "unique_affected_functions": {{unique_affected_functions}}
+        },
+        "source_sink_analysis": {
+            "sources_found": {{sources_found}},
+            "sinks_found": {{sinks_found}},
+            "matched_pairs": {{matched_pairs}},
+            "match_rate": "{{match_rate}}"
+        }
+    },
+    "recommendations": [
+        {
+            "priority": "critical",
+            "title": "{{recommendation_title}}",
+            "description": "{{recommendation_description}}",
+            "affected_vulnerabilities": {{affected_vulns}}
+        }
+    ],
+    "compliance": {
+        "owasp_top_10": {
+            "A01_broken_access_control": {{owasp_a01}},
+            "A02_cryptographic_failures": {{owasp_a02}},
+            "A03_injection": {{owasp_a03}},
+            "A04_insecure_design": {{owasp_a04}},
+            "A05_security_misconfiguration": {{owasp_a05}},
+            "A06_vulnerable_components": {{owasp_a06}},
+            "A07_auth_failures": {{owasp_a07}},
+            "A08_integrity_failures": {{owasp_a08}},
+            "A09_logging_failures": {{owasp_a09}},
+            "A10_ssrf": {{owasp_a10}}
+        },
+        "cwe_coverage": {{cwe_coverage}}
+    }
+}

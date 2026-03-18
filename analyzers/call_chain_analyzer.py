@@ -72,29 +72,90 @@ class CallChainAnalyzer:
                     vulnerabilities.append(vuln)
                     vuln_id += 1
         
+        # 如果没有找到完整调用链，尝试直接匹配source和sink
+        if not vulnerabilities:
+            for sink in sinks:
+                # 找到sink所在的函数
+                sink_func = self._find_containing_function(sink.file_path, sink.line_number)
+                
+                # 查找匹配的source
+                for source in sources:
+                    source_func_key = f"{source.file_path}:{source.function_name}"
+                    
+                    # 检查sink是否在source函数内
+                    if sink_func and sink_func == source_func_key:
+                        # 创建直接调用链
+                        chain = self._create_direct_chain(source, sink)
+                        
+                        vuln = Vulnerability(
+                            id=f"VULN-{vuln_id:04d}",
+                            name=f"{sink.vulnerability_type.value} in {source.function_name}",
+                            vulnerability_type=sink.vulnerability_type,
+                            severity=sink.severity,
+                            source=source,
+                            sink=sink,
+                            call_chain=chain,
+                            description=f"在函数 {source.function_name} 中检测到 {sink.vulnerability_type.value}",
+                            remediation=sink.remediation,
+                            cwe_id=self._get_cwe_id(sink.vulnerability_type)
+                        )
+                        vulnerabilities.append(vuln)
+                        vuln_id += 1
+                        break
+        
         return vulnerabilities
+    
+    def _create_direct_chain(self, source: SourcePoint, sink: SinkPoint) -> CallChain:
+        """创建直接调用链"""
+        node = CallChainNode(
+            file_path=source.file_path,
+            line_number=source.line_number,
+            function_name=source.function_name,
+            code_snippet=source.code_snippet,
+            call_type="direct"
+        )
+        
+        return CallChain(
+            source=source,
+            sink=sink,
+            nodes=[node],
+            is_complete=True,
+            data_flow=[f"{source.function_name}() -> {sink.function_name}()"]
+        )
     
     def _build_call_graph(self, target_path: str):
         """构建函数调用图"""
         self.call_graph.clear()
         self.function_definitions.clear()
         
-        # 遍历所有文件
-        for root, dirs, files in os.walk(target_path):
-            dirs[:] = [d for d in dirs if d not in self.config.exclude_dirs]
-            
-            for file in files:
-                file_path = os.path.join(root, file)
-                ext = os.path.splitext(file)[1].lower()
+        # 检查是文件还是目录
+        if os.path.isfile(target_path):
+            ext = os.path.splitext(target_path)[1].lower()
+            if ext == '.py':
+                self._build_python_call_graph(target_path)
+            elif ext in ['.js', '.ts']:
+                self._build_js_call_graph(target_path)
+            elif ext == '.java':
+                self._build_java_call_graph(target_path)
+            elif ext == '.go':
+                self._build_go_call_graph(target_path)
+        else:
+            # 遍历所有文件
+            for root, dirs, files in os.walk(target_path):
+                dirs[:] = [d for d in dirs if d not in self.config.exclude_dirs]
                 
-                if ext == '.py':
-                    self._build_python_call_graph(file_path)
-                elif ext in ['.js', '.ts']:
-                    self._build_js_call_graph(file_path)
-                elif ext == '.java':
-                    self._build_java_call_graph(file_path)
-                elif ext == '.go':
-                    self._build_go_call_graph(file_path)
+                for file in files:
+                    file_path = os.path.join(root, file)
+                    ext = os.path.splitext(file)[1].lower()
+                    
+                    if ext == '.py':
+                        self._build_python_call_graph(file_path)
+                    elif ext in ['.js', '.ts']:
+                        self._build_js_call_graph(file_path)
+                    elif ext == '.java':
+                        self._build_java_call_graph(file_path)
+                    elif ext == '.go':
+                        self._build_go_call_graph(file_path)
     
     def _build_python_call_graph(self, file_path: str):
         """构建Python文件的调用图"""

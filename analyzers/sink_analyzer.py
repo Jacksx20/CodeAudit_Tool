@@ -108,16 +108,23 @@ class SinkAnalyzer:
         """分析目标路径，识别所有Sink点"""
         self.sinks = []
         
-        # 遍历所有文件
-        for root, dirs, files in os.walk(target_path):
-            dirs[:] = [d for d in dirs if d not in self.config.exclude_dirs]
-            
-            for file in files:
-                file_path = os.path.join(root, file)
-                ext = os.path.splitext(file)[1].lower()
+        # 检查是文件还是目录
+        if os.path.isfile(target_path):
+            # 单个文件
+            ext = os.path.splitext(target_path)[1].lower()
+            if ext in self.config.supported_extensions:
+                self._analyze_file(target_path)
+        else:
+            # 遍历所有文件
+            for root, dirs, files in os.walk(target_path):
+                dirs[:] = [d for d in dirs if d not in self.config.exclude_dirs]
                 
-                if ext in self.config.supported_extensions:
-                    self._analyze_file(file_path)
+                for file in files:
+                    file_path = os.path.join(root, file)
+                    ext = os.path.splitext(file)[1].lower()
+                    
+                    if ext in self.config.supported_extensions:
+                        self._analyze_file(file_path)
         
         return self.sinks
     

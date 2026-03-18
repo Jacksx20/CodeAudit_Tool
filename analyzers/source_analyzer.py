@@ -76,17 +76,24 @@ class SourceAnalyzer:
         self.sources = []
         self.detected_frameworks = set()
         
-        # 遍历所有文件
-        for root, dirs, files in os.walk(target_path):
-            # 排除特定目录
-            dirs[:] = [d for d in dirs if d not in self.config.exclude_dirs]
-            
-            for file in files:
-                file_path = os.path.join(root, file)
-                ext = os.path.splitext(file)[1].lower()
+        # 检查是文件还是目录
+        if os.path.isfile(target_path):
+            # 单个文件
+            ext = os.path.splitext(target_path)[1].lower()
+            if ext in self.config.supported_extensions:
+                self._analyze_file(target_path)
+        else:
+            # 遍历所有文件
+            for root, dirs, files in os.walk(target_path):
+                # 排除特定目录
+                dirs[:] = [d for d in dirs if d not in self.config.exclude_dirs]
                 
-                if ext in self.config.supported_extensions:
-                    self._analyze_file(file_path)
+                for file in files:
+                    file_path = os.path.join(root, file)
+                    ext = os.path.splitext(file)[1].lower()
+                    
+                    if ext in self.config.supported_extensions:
+                        self._analyze_file(file_path)
         
         return self.sources
     
@@ -190,8 +197,21 @@ class SourceAnalyzer:
             if isinstance(decorator.func, ast.Name):
                 return f"@{decorator.func.id}(...)"
             elif isinstance(decorator.func, ast.Attribute):
-                return f"@{self._get_attribute_string(decorator.func)}(...)"
+                attr_str = self._get_attribute_string(decorator.func)
+                # 提取参数
+                args_str = ""
+                if decorator.args:
+                    args_str = ", ".join([self._get_arg_string(arg) for arg in decorator.args])
+                return f"@{attr_str}({args_str})"
         return ""
+    
+    def _get_arg_string(self, arg) -> str:
+        """获取参数字符串"""
+        if isinstance(arg, ast.Constant):
+            return repr(arg.value)
+        elif isinstance(arg, ast.Str):  # Python 3.7兼容
+            return repr(arg.s)
+        return "..."
     
     def _get_attribute_string(self, node) -> str:
         """获取属性访问字符串"""

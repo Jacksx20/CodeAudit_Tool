@@ -172,14 +172,15 @@ def main():
     if args.poc and result.vulnerabilities:
         print("\n[+] 生成PoC...")
         poc_generator = PoCGenerator(config, args.base_url)
-        
+
         poc_dir = args.output if args.output else './pocs'
         os.makedirs(poc_dir, exist_ok=True)
-        
+
         for vuln in result.vulnerabilities:
             poc = poc_generator.generate_poc(vuln)
             if poc:
-                poc_file = os.path.join(poc_dir, f"{vuln.id}_poc.py")
+                # 使用 README 中指定的格式: poc_VULN-ID_vuln_type.py
+                poc_file = os.path.join(poc_dir, f"poc_{vuln.id}_{vuln.vulnerability_type.value}.py")
                 poc_generator.save_poc_to_file(poc, poc_file)
                 print(f"    生成PoC: {poc_file}")
     

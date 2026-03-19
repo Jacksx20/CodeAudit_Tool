@@ -1,6 +1,6 @@
-# Code Security Audit Tool
+# CodeAudit_Tool
 
-## 代码安全审计工具
+## 代码安全审计工具Code Security Audit Tool
 
 一个功能强大的自动化代码安全审计工具，支持多种Web框架和漏洞类型，能够自动识别Source点、检测Sink点、构建调用链、生成PoC验证代码，并输出多格式安全报告。
 
@@ -70,37 +70,141 @@
 
 ```
 CodeAudit_Tool/
-├── cli.py                    # 主入口文件
-├── core/                     # 核心模块
-│   ├── __init__.py
-│   ├── config.py            # 配置和数据结构定义
-│   └── audit_engine.py      # 审计引擎
-├── analyzers/               # 分析器模块
-│   ├── source_analyzer.py   # Source点分析器
-│   ├── sink_analyzer.py     # Sink点分析器
-│   └── call_chain_analyzer.py # 调用链分析器
-├── generators/              # 生成器模块
-│   └── poc_generator.py     # PoC生成器
-├── reports/                 # 报告模块
-│   └── report_generator.py  # 报告生成器
-├── rules/                   # 规则库
-│   ├── SS/                  # Sink和source规则
-│   │   ├── sink_rules.json    # 危险函数规则库
-│   │   └── source_rules.json
-│   └── sources/             # Source规则
-│   	├── sql_injection.json
-│   	├── xss.json
-│   	├── command_injection.json
-│   	├── ssrf.json
-│   	├── path_traversal.json
-│   	└── deserialization.json
+├── cli.py                          # 命令行主入口文件
+├── setup.py                        # Python 包安装配置
+├── pyproject.toml                  # 现代 Python 项目配置
+├── requirements.txt                # 项目依赖清单
 │
-└── templates/                 # 报告模板
-│     ├── html/
-│     │     └── report_template.html
-│     └── markdown/
-│           └── report_template.md
-└── README.md               # 项目说明文档
+├── core/                           # 核心模块
+│   ├── __init__.py
+│   ├── config.py                   # 配置管理、数据结构定义、规则加载
+│   └── audit_engine.py             # 审计引擎、双向审计、攻击链分析
+│
+├── analyzers/                      # 分析器模块
+│   ├── __init__.py
+│   ├── source_analyzer.py          # Source点分析器（HTTP入口点识别）
+│   │   └── 支持框架: Flask, Django, FastAPI, Express, Spring, Gin
+│   ├── sink_analyzer.py            # Sink点分析器（危险函数检测）
+│   │   └── 支持漏洞类型: SQL注入, XSS, 命令注入等10种
+│   └── call_chain_analyzer.py      # 调用链分析器（污点传播追踪）
+│       └── 功能: 构建调用图、路径查找、链路分析
+│
+├── generators/                     # 生成器模块
+│   ├── __init__.py
+│   └── poc_generator.py            # PoC生成器（漏洞验证代码）
+│       └── 支持语言: Python, JavaScript, Java, Go, PHP
+│
+├── reports/                        # 报告模块
+│   ├── __init__.py
+│   └── report_generator.py         # 报告生成器（多格式输出）
+│       └── 支持格式: JSON, HTML, Markdown
+│
+├── rules/                          # 规则库
+│   ├── sinks/                      # Sink规则（危险函数）
+│   │   ├── __init__.py
+│   │   └── sink_rules.py           # 危险函数规则定义
+│   │       └── 包含10种漏洞类型的危险函数模式
+│   ├── sources/                    # Source规则（HTTP入口点）
+│   │   ├── __init__.py
+│   │   └── source_patterns.py      # 框架路由模式定义
+│   │       └── 包含6种框架的路由模式
+│   └── vulnerabilities/            # 漏洞详细规则
+│       ├── __init__.py
+│       ├── sql_injection.json      # SQL注入规则
+│       ├── xss.json                # XSS规则
+│       ├── command_injection.json  # 命令注入规则
+│       ├── ssrf.json               # SSRF规则
+│       ├── path_traversal.json     # 路径遍历规则
+│       └── deserialization.json    # 反序列化规则
+│
+├── templates/                      # 报告模板
+│   ├── html/
+│   │   └── report_template.html    # HTML报告模板（可视化）
+│   ├── markdown/
+│   │   └── report_template.md      # Markdown报告模板（文档）
+│   └── json/
+│       └── report_template.json    # JSON报告模板（结构化）
+│
+├── test/                           # 测试文件
+│   ├── test_vulnerable_app.py      # 漏洞测试样本
+│   └── test_audit.py               # 自动化测试脚本
+│
+└── README.md                       # 项目文档
+```
+
+---
+
+### 架构说明
+
+#### 1. 核心层 (Core Layer)
+
+**负责整体协调和配置管理：**
+
+* **config.py**: 定义所有数据结构（SourcePoint, SinkPoint, CallChain, Vulnerability, PoC, AuditResult），加载和管理规则库
+* **audit\_engine.py**: 主审计引擎，协调各分析器，执行正向/反向审计，分析攻击链
+
+#### 2. 分析层 (Analyzer Layer)
+
+**负责代码静态分析和漏洞检测：**
+
+* **source\_analyzer.py**: 使用AST解析和正则匹配，识别HTTP入口点（路由、控制器）
+* **sink\_analyzer.py**: 识别危险函数调用，标记潜在的Sink点
+* **call\_chain\_analyzer.py**: 构建调用图，分析污点传播路径，构建Source→Sink调用链
+
+#### 3. 生成层 (Generator Layer)
+
+**负责生成漏洞验证代码：**
+
+* **poc\_generator.py**: 根据漏洞类型和调用链，自动生成可执行的PoC验证代码
+
+#### 4. 报告层 (Report Layer)
+
+**负责生成多格式安全报告：**
+
+* **report\_generator.py**: 支持JSON/HTML/Markdown三种格式，包含统计、详情、建议、合规性等
+
+#### 5. 规则库 (Rules)
+
+**存储所有检测规则：**
+
+* **sinks/**: 危险函数规则（Sink点）
+* **sources/**: HTTP入口点规则（Source点）
+* **vulnerabilities/**: 漏洞详细规则（描述、CWE、修复建议等）
+
+#### 6. 模板层 (Templates)
+
+**提供报告模板：**
+
+* **html/**: 可视化HTML模板
+* **markdown/**: 文档化Markdown模板
+* **json/**: 结构化JSON模板
+
+### 数据流
+
+```
+用户输入 (代码路径)
+    ↓
+CLI入口 (cli.py)
+    ↓
+审计引擎 (audit_engine.py)
+    ├─→ Source分析器 (source_analyzer.py)
+    │   └─→ 识别HTTP入口点
+    ├─→ Sink分析器 (sink_analyzer.py)
+    │   └─→ 识别危险函数
+    ├─→ 调用链分析器 (call_chain_analyzer.py)
+    │   └─→ 构建调用链
+    └─→ 攻击链分析
+        └─→ 识别漏洞组合
+    ↓
+PoC生成器 (poc_generator.py)
+    └─→ 生成验证代码
+    ↓
+报告生成器 (report_generator.py)
+    ├─→ JSON报告
+    ├─→ HTML报告
+    └─→ Markdown报告
+    ↓
+输出报告文件
 ```
 
 ---
@@ -111,15 +215,16 @@ CodeAudit_Tool/
 
 #### 支持的Python版本
 
-| Python版本 | 支持状态 | 说明 |
-|-----------|---------|------|
-| Python 3.7 | ✅ 支持 | 最低支持版本，部分类型注解需要 `from __future__ import annotations` |
-| Python 3.8 | ✅ 支持 | 推荐版本，完整支持所有功能 |
-| Python 3.9 | ✅ 支持 | 完整支持，性能优化 |
-| Python 3.10 | ✅ 支持 | 完整支持，支持新的语法特性 |
-| Python 3.11 | ✅ 支持 | 完整支持，性能显著提升 |
-| Python 3.12+ | ✅ 支持 | 完整支持最新版本 |
-| Python 2.x | ❌ 不支持 | 不支持Python 2.x版本 |
+
+| Python版本   | 支持状态  | 说明                                                               |
+| ------------ | --------- | ------------------------------------------------------------------ |
+| Python 3.7   | ✅ 支持   | 最低支持版本，部分类型注解需要`from __future__ import annotations` |
+| Python 3.8   | ✅ 支持   | 推荐版本，完整支持所有功能                                         |
+| Python 3.9   | ✅ 支持   | 完整支持，性能优化                                                 |
+| Python 3.10  | ✅ 支持   | 完整支持，支持新的语法特性                                         |
+| Python 3.11  | ✅ 支持   | 完整支持，性能显著提升                                             |
+| Python 3.12+ | ✅ 支持   | 完整支持最新版本                                                   |
+| Python 2.x   | ❌ 不支持 | 不支持Python 2.x版本                                               |
 
 #### 版本选择建议
 
@@ -150,13 +255,14 @@ CodeAudit_Tool/
 pip install -r requirements.txt
 ```
 
-| 依赖包 | 版本要求 | 用途 | 必需 |
-|-------|---------|------|------|
+
+| 依赖包   | 版本要求 | 用途            | 必需 |
+| -------- | -------- | --------------- | ---- |
 | requests | >=2.25.0 | PoC验证HTTP请求 | 可选 |
-| pyyaml | >=5.4.0 | YAML配置解析 | 可选 |
-| pytest | >=6.0.0 | 单元测试 | 开发 |
-| black | >=21.0 | 代码格式化 | 开发 |
-| flake8 | >=3.9.0 | 代码检查 | 开发 |
+| pyyaml   | >=5.4.0  | YAML配置解析    | 可选 |
+| pytest   | >=6.0.0  | 单元测试        | 开发 |
+| black    | >=21.0   | 代码格式化      | 开发 |
+| flake8   | >=3.9.0  | 代码检查        | 开发 |
 
 ### 基本用法
 
@@ -413,12 +519,30 @@ MIT License
 
 ## 更新日志
 
-### v1.0.0 (2026-03)
+### v1.0.0 (2026-03-18)
 
-- 初始版本发布
-- 支持多框架Source点识别
-- 内置完整危险函数规则库
-- 实现双向审计模式
-- 支持调用链分析
-- 自动生成PoC验证代码
-- 支持多格式报告输出
+#### 初始版本发布
+
+**核心功能**
+
+- ✅ 支持多框架 Source 点识别（Flask、Django、FastAPI、Express、Spring、Gin）
+- ✅ 内置完整危险函数规则库
+- ✅ 支持 10 种常见漏洞类型检测
+- ✅ 实现双向审计模式（正向 + 反向）
+- ✅ 支持调用链分析
+- ✅ 自动生成 PoC 验证代码
+- ✅ 支持多格式报告输出（JSON、HTML、Markdown）
+- ✅ 攻击链分析功能
+
+**漏洞类型支持**
+
+- SQL 注入 (CWE-89)
+- 命令注入 (CWE-78)
+- 路径遍历 (CWE-22)
+- 服务端请求伪造 (CWE-918)
+- 跨站脚本 (CWE-79)
+- 反序列化 (CWE-502)
+- 代码注入 (CWE-94)
+- LDAP 注入 (CWE-90)
+- XML 注入/XXE (CWE-611)
+- 开放重定向 (CWE-601)

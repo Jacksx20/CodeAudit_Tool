@@ -1,0 +1,63 @@
+{
+    "open_redirect": {
+        "name": "开放重定向",
+        "cwe_id": "CWE-601",
+        "cvss_base_score": 5.4,
+        "description": "开放重定向漏洞允许攻击者将用户重定向到恶意网站，用于钓鱼攻击",
+        "impact": "网络钓鱼、凭证窃取、恶意软件分发、社会工程攻击",
+        "payloads": {
+            "basic_redirects": [
+                "//evil.com",
+                "//evil.com/",
+                "https://evil.com",
+                "http://evil.com",
+                "//attacker.com",
+                "///evil.com",
+                "/\\/evil.com",
+                "/\\evil.com"
+            ],
+            "javascript_redirects": [
+                "javascript:alert('XSS')",
+                "javascript:document.location='http://evil.com'",
+                "javascript:window.location='http://evil.com'",
+                "javascript:void(document.location='http://evil.com')"
+            ],
+            "data_redirects": [
+                "data:text/html,<script>alert('XSS')</script>",
+                "data:text/html;base64,PHNjcmlwdD5hbGVydCgnWFNTJyk8L3NjcmlwdD4="
+            ],
+            "url_encoding": [
+                "%2F%2Fevil.com",
+                "%2F%2F%2Fevil.com",
+                "%68%74%74%70%3A%2F%2F%65%76%69%6C%2E%63%6F%6D"
+            ]
+        },
+        "detection_patterns": [
+            "redirect\\s*\\(.*\\+.*\\)",
+            "header\\s*\\(.*Location.*\\+.*\\)",
+            "response\\.redirect\\s*\\(.*\\+.*\\)",
+            "url\\s*=.*request\\.",
+            "next\\s*=.*request\\.",
+            "return_to\\s*=.*request\\."
+        ],
+        "safe_patterns": [
+            "redirect\\s*\\(.*whitelist.*\\)",
+            "urlparse.*netloc.*in.*whitelist",
+            "使用白名单验证URL",
+            "使用相对路径"
+        ],
+        "remediation": [
+            "使用白名单验证重定向URL",
+            "使用相对路径而非绝对URL",
+            "使用安全的重定向方法(如redirect_to)",
+            "验证URL的域名部分",
+            "避免使用用户输入作为重定向目标",
+            "添加CSRF保护"
+        ],
+        "references": [
+            "https://cwe.mitre.org/data/definitions/601.html",
+            "https://owasp.org/www-project-web-security-testing-guide/latest/4-Web_Application_Security_Testing/11-Client_Side_Testing/04-Testing_for_Client_Side_URL_Redirect",
+            "https://portswigger.net/web-security/access-control/open-redirects"
+        ]
+    }
+}

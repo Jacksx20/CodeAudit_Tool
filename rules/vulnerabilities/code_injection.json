@@ -1,0 +1,58 @@
+{
+    "code_injection": {
+        "name": "代码注入",
+        "cwe_id": "CWE-94",
+        "cvss_base_score": 9.8,
+        "description": "代码注入漏洞允许攻击者在应用程序上下文中执行任意代码",
+        "impact": "远程代码执行、服务器完全控制、数据泄露、权限提升",
+        "payloads": {
+            "python": [
+                "__import__('os').system('id')",
+                "eval('__import__(\"os\").system(\"id\")')",
+                "exec(\"__import__('os').system('id')\")",
+                "(lambda: __import__('os').system('id'))()",
+                "().__class__.__bases__[0].__subclasses__()[140].__init__.____('id')"
+            ],
+            "php": [
+                "system('id');",
+                "exec('system(\"id\");');",
+                "shell_exec('id');",
+                "passthru('id');",
+                "`id`",
+                "eval($_GET['cmd'])"
+            ],
+            "javascript": [
+                "eval('require(\"child_process\").exec(\"id\")')",
+                "Function('require(\"child_process\").exec(\"id\")')()",
+                "global.process.mainModule.require('child_process').exec('id')"
+            ]
+        },
+        "detection_patterns": [
+            "eval\\s*\\(.*\\+.*\\)",
+            "exec\\s*\\(.*\\+.*\\)",
+            "system\\s*\\(.*\\+.*\\)",
+            "shell_exec\\s*\\(.*\\+.*\\)",
+            "passthru\\s*\\(.*\\+.*\\)",
+            "\\$\\{.*\\}",
+            "backtick\\s*\\(.*\\+.*\\)"
+        ],
+        "safe_patterns": [
+            "eval\\s*\\(.*literal.*\\)",
+            "使用静态字符串",
+            "使用白名单验证"
+        ],
+        "remediation": [
+            "避免使用eval、exec等危险函数",
+            "使用白名单验证用户输入",
+            "使用安全的模板引擎",
+            "实施严格的输入验证和过滤",
+            "使用沙箱环境执行用户代码",
+            "实施最小权限原则"
+        ],
+        "references": [
+            "https://owasp.org/www-community/attacks/Code_Injection",
+            "https://cwe.mitre.org/data/definitions/94.html",
+            "https://portswigger.net/web-security/os-command-injection"
+        ]
+    }
+}

@@ -2,6 +2,8 @@
 
 ## 代码安全审计工具Code Security Audit Tool
 
+**[English](README_EN.md) | 简体中文**
+
 一个功能强大的自动化代码安全审计工具，支持多种Web框架和漏洞类型，能够自动识别Source点、检测Sink点、构建调用链、生成PoC验证代码，并输出多格式安全报告。
 
 ---

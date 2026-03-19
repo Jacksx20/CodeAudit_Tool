@@ -29,92 +29,114 @@ class AuditEngine:
         self.sink_analyzer = SinkAnalyzer(self.config)
         self.call_chain_analyzer = CallChainAnalyzer(self.config)
     
-    def audit(self, target_path: str, 
+    def audit(self, target_path: str,
               enable_forward: bool = True,
               enable_reverse: bool = True,
               enable_attack_chain: bool = True) -> AuditResult:
         """
         执行代码安全审计
-        
+
         Args:
             target_path: 目标代码路径
             enable_forward: 是否启用正向审计
             enable_reverse: 是否启用反向审计
             enable_attack_chain: 是否启用攻击链分析
-            
+
         Returns:
             AuditResult: 审计结果
         """
+        # 验证目标路径
+        if not os.path.exists(target_path):
+            print(f"[!] 错误: 目标路径不存在: {target_path}")
+            result = AuditResult(target_path=target_path)
+            result.scan_time = 0.0
+            return result
+
         start_time = time.time()
-        
+
         # 初始化结果
         result = AuditResult(target_path=target_path)
-        
+
         # 统计文件数
         result.total_files = self._count_files(target_path)
-        
+
         print(f"[*] 开始审计目标: {target_path}")
         print(f"[*] 总文件数: {result.total_files}")
-        
-        # Step 1: 识别Source点
-        print("\n[+] Step 1: 识别HTTP入口点(Source点)...")
-        sources = self.source_analyzer.analyze(target_path)
-        result.sources_found = len(sources)
-        result.framework = self._get_primary_framework(self.source_analyzer.get_detected_frameworks())
-        print(f"    发现 {len(sources)} 个Source点")
-        
-        # Step 2: 检测Sink点
-        print("\n[+] Step 2: 检测危险函数调用(Sink点)...")
-        sinks = self.sink_analyzer.analyze(target_path)
-        result.sinks_found = len(sinks)
-        print(f"    发现 {len(sinks)} 个Sink点")
-        
-        # Step 3: 分析调用链
-        print("\n[+] Step 3: 分析调用链...")
-        vulnerabilities = []
-        seen_vulns = set()  # 用于去重
-        
-        if enable_reverse:
-            print("    执行反向审计(从Sink到Source)...")
-            vulns_reverse = self.call_chain_analyzer.analyze(target_path, sources, sinks)
-            for vuln in vulns_reverse:
-                vuln_key = (vuln.source.function_name, vuln.sink.function_name, 
-                           vuln.vulnerability_type.value, vuln.sink.line_number)
-                if vuln_key not in seen_vulns:
-                    vulnerabilities.append(vuln)
-                    seen_vulns.add(vuln_key)
-            print(f"    反向审计发现 {len(vulns_reverse)} 个漏洞")
-        
-        if enable_forward:
-            print("    执行正向审计(从Source到Sink)...")
-            vulns_forward = self._forward_audit(target_path, sources, sinks)
-            # 合并结果，避免重复
-            for vuln in vulns_forward:
-                vuln_key = (vuln.source.function_name, vuln.sink.function_name,
-                           vuln.vulnerability_type.value, vuln.sink.line_number)
-                if vuln_key not in seen_vulns:
-                    vulnerabilities.append(vuln)
-                    seen_vulns.add(vuln_key)
-            print(f"    正向审计发现 {len(vulns_forward)} 个漏洞")
-        
-        result.vulnerabilities = vulnerabilities
-        print(f"    总计发现 {len(vulnerabilities)} 个漏洞")
-        
-        # Step 4: 分析攻击链
-        if enable_attack_chain and len(vulnerabilities) > 1:
-            print("\n[+] Step 4: 分析攻击链...")
-            attack_chains = self._analyze_attack_chains(vulnerabilities)
-            result.attack_chains = attack_chains
-            print(f"    发现 {len(attack_chains)} 条潜在攻击链")
-        
-        # 统计扫描文件数
-        result.scanned_files = self._count_scanned_files(target_path)
-        
+
+        try:
+            # Step 1: 识别Source点
+            print("\n[+] Step 1: 识别HTTP入口点(Source点)...")
+            sources = self.source_analyzer.analyze(target_path)
+            result.sources_found = len(sources)
+            result.framework = self._get_primary_framework(self.source_analyzer.get_detected_frameworks())
+            print(f"    发现 {len(sources)} 个Source点")
+
+            # Step 2: 检测Sink点
+            print("\n[+] Step 2: 检测危险函数调用(Sink点)...")
+            sinks = self.sink_analyzer.analyze(target_path)
+            result.sinks_found = len(sinks)
+            print(f"    发现 {len(sinks)} 个Sink点")
+
+            # Step 3: 分析调用链
+            print("\n[+] Step 3: 分析调用链...")
+            vulnerabilities = []
+            seen_vulns = set()  # 用于去重
+
+            if enable_reverse:
+                print("    执行反向审计(从Sink到Source)...")
+                try:
+                    vulns_reverse = self.call_chain_analyzer.analyze(target_path, sources, sinks)
+                    for vuln in vulns_reverse:
+                        vuln_key = (vuln.source.function_name, vuln.sink.function_name,
+                                   vuln.vulnerability_type.value, vuln.sink.line_number)
+                        if vuln_key not in seen_vulns:
+                            vulnerabilities.append(vuln)
+                            seen_vulns.add(vuln_key)
+                    print(f"    反向审计发现 {len(vulns_reverse)} 个漏洞")
+                except Exception as e:
+                    print(f"    反向审计出错: {e}")
+
+            if enable_forward:
+                print("    执行正向审计(从Source到Sink)...")
+                try:
+                    vulns_forward = self._forward_audit(target_path, sources, sinks)
+                    # 合并结果，避免重复
+                    for vuln in vulns_forward:
+                        vuln_key = (vuln.source.function_name, vuln.sink.function_name,
+                                   vuln.vulnerability_type.value, vuln.sink.line_number)
+                        if vuln_key not in seen_vulns:
+                            vulnerabilities.append(vuln)
+                            seen_vulns.add(vuln_key)
+                    print(f"    正向审计发现 {len(vulns_forward)} 个漏洞")
+                except Exception as e:
+                    print(f"    正向审计出错: {e}")
+
+            result.vulnerabilities = vulnerabilities
+            print(f"    总计发现 {len(vulnerabilities)} 个漏洞")
+
+            # Step 4: 分析攻击链
+            if enable_attack_chain and len(vulnerabilities) > 1:
+                print("\n[+] Step 4: 分析攻击链...")
+                try:
+                    attack_chains = self._analyze_attack_chains(vulnerabilities)
+                    result.attack_chains = attack_chains
+                    print(f"    发现 {len(attack_chains)} 条潜在攻击链")
+                except Exception as e:
+                    print(f"    攻击链分析出错: {e}")
+
+            # 统计扫描文件数
+            result.scanned_files = self._count_scanned_files(target_path)
+
+        except Exception as e:
+            print(f"[!] 审计过程中发生错误: {e}")
+            import traceback
+            traceback.print_exc()
+
         # 计算扫描时间
         result.scan_time = time.time() - start_time
-        
+
         print(f"\n[*] 审计完成，耗时: {result.scan_time:.2f}秒")
-        
+
         return result
     
     def _count_files(self, target_path: str) -> int:

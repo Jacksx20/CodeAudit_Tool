@@ -308,21 +308,36 @@ class Config:
     def _load_sink_rules(self) -> Dict:
         """加载Sink规则"""
         rules = {}
-        sink_rules_path = os.path.join(self.rules_dir, 'SS', 'sink_rules.json')
         
+        # 优先加载Python规则文件
+        sink_rules_path = os.path.join(self.rules_dir, 'sinks', 'sink_rules.py')
         if os.path.exists(sink_rules_path):
             try:
-                with open(sink_rules_path, 'r', encoding='utf-8') as f:
+                import importlib.util
+                spec = importlib.util.spec_from_file_location("sink_rules", sink_rules_path)
+                if spec and spec.loader:
+                    sink_rules_module = importlib.util.module_from_spec(spec)
+                    spec.loader.exec_module(sink_rules_module)
+                    if hasattr(sink_rules_module, 'SINK_RULES'):
+                        rules.update(sink_rules_module.SINK_RULES)
+            except Exception as e:
+                print(f"加载Python sink规则失败: {e}")
+        
+        # 备用：加载JSON规则文件
+        sink_rules_json_path = os.path.join(self.rules_dir, 'SS', 'sink_rules.json')
+        if os.path.exists(sink_rules_json_path) and not rules:
+            try:
+                with open(sink_rules_json_path, 'r', encoding='utf-8') as f:
                     rules = json.load(f)
             except Exception as e:
-                print(f"加载sink规则失败: {e}")
+                print(f"加载JSON sink规则失败: {e}")
         
         # 加载各漏洞类型的详细规则
-        sources_dir = os.path.join(self.rules_dir, 'sources')
-        if os.path.exists(sources_dir):
-            for filename in os.listdir(sources_dir):
+        vulnerabilities_dir = os.path.join(self.rules_dir, 'vulnerabilities')
+        if os.path.exists(vulnerabilities_dir):
+            for filename in os.listdir(vulnerabilities_dir):
                 if filename.endswith('.json'):
-                    filepath = os.path.join(sources_dir, filename)
+                    filepath = os.path.join(vulnerabilities_dir, filename)
                     try:
                         with open(filepath, 'r', encoding='utf-8') as f:
                             vuln_rules = json.load(f)
@@ -335,14 +350,29 @@ class Config:
     def _load_source_rules(self) -> Dict:
         """加载Source规则"""
         rules = {}
-        source_rules_path = os.path.join(self.rules_dir, 'SS', 'source_rules.json')
         
+        # 优先加载Python规则文件
+        source_rules_path = os.path.join(self.rules_dir, 'sources', 'source_patterns.py')
         if os.path.exists(source_rules_path):
             try:
-                with open(source_rules_path, 'r', encoding='utf-8') as f:
+                import importlib.util
+                spec = importlib.util.spec_from_file_location("source_rules", source_rules_path)
+                if spec and spec.loader:
+                    source_rules_module = importlib.util.module_from_spec(spec)
+                    spec.loader.exec_module(source_rules_module)
+                    if hasattr(source_rules_module, 'SOURCE_PATTERNS'):
+                        rules.update(source_rules_module.SOURCE_PATTERNS)
+            except Exception as e:
+                print(f"加载Python source规则失败: {e}")
+        
+        # 备用：加载JSON规则文件
+        source_rules_json_path = os.path.join(self.rules_dir, 'SS', 'source_rules.json')
+        if os.path.exists(source_rules_json_path) and not rules:
+            try:
+                with open(source_rules_json_path, 'r', encoding='utf-8') as f:
                     rules = json.load(f)
             except Exception as e:
-                print(f"加载source规则失败: {e}")
+                print(f"加载JSON source规则失败: {e}")
         
         return rules
     

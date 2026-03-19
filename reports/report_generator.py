@@ -55,7 +55,7 @@ class ReportGenerator:
         report_data = {
             'meta': {
                 'tool': 'Code Audit Tool',
-                'version': '1.0.0',
+                'version': '1.1.1',
                 'generated_at': datetime.now().isoformat(),
                 'target_path': result.target_path,
                 'scan_time': result.scan_time,

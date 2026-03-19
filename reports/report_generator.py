@@ -571,29 +571,31 @@ class ReportGenerator:
     def generate_all_formats(self, result: AuditResult, output_dir: str) -> Dict[str, str]:
         """
         生成所有格式的报告
-        
+
         Args:
             result: 审计结果
             output_dir: 输出目录
-            
+
         Returns:
             生成的报告文件路径字典
         """
         os.makedirs(output_dir, exist_ok=True)
-        
-        base_name = "audit_report"
+
+        # 生成带时间戳的文件名
+        timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
+        base_name = f"audit_report_{timestamp}"
         reports = {}
-        
+
         # JSON报告
         json_path = os.path.join(output_dir, f"{base_name}.json")
         reports['json'] = self._generate_json(result, json_path)
-        
+
         # HTML报告
         html_path = os.path.join(output_dir, f"{base_name}.html")
         reports['html'] = self._generate_html(result, html_path)
-        
+
         # Markdown报告
         md_path = os.path.join(output_dir, f"{base_name}.md")
         reports['markdown'] = self._generate_markdown(result, md_path)
-        
+
         return reports

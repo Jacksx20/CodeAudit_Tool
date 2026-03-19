@@ -438,6 +438,10 @@ class ReportGenerator:
         html = html.replace('{{sources_found}}', str(result.sources_found))
         html = html.replace('{{sinks_found}}', str(result.sinks_found))
         html = html.replace('{{vulnerabilities_count}}', str(len(result.vulnerabilities)))
+        html = html.replace('{{critical_count}}', str(summary['critical']))
+        html = html.replace('{{high_count}}', str(summary['high']))
+        html = html.replace('{{medium_count}}', str(summary['medium']))
+        html = html.replace('{{low_count}}', str(summary['low']))
         html = html.replace('{{vulnerabilities_html}}', vulns_html)
         html = html.replace('{{attack_chains_html}}', attack_chains_html)
         
@@ -485,6 +489,9 @@ class ReportGenerator:
     
     def _render_markdown_template(self, template: str, result: AuditResult) -> str:
         """渲染Markdown模板"""
+        # 获取漏洞统计摘要
+        summary = result.get_summary()
+        
         # 生成漏洞Markdown
         vulns_md = ""
         for vuln in result.vulnerabilities:
@@ -552,6 +559,10 @@ class ReportGenerator:
         md = md.replace('{{sources_found}}', str(result.sources_found))
         md = md.replace('{{sinks_found}}', str(result.sinks_found))
         md = md.replace('{{vulnerabilities_count}}', str(len(result.vulnerabilities)))
+        md = md.replace('{{critical_count}}', str(summary['critical']))
+        md = md.replace('{{high_count}}', str(summary['high']))
+        md = md.replace('{{medium_count}}', str(summary['medium']))
+        md = md.replace('{{low_count}}', str(summary['low']))
         md = md.replace('{{vulnerabilities_md}}', vulns_md)
         md = md.replace('{{attack_chains_md}}', attack_chains_md)
         

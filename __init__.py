@@ -8,7 +8,7 @@ from .analyzers import SourceAnalyzer, SinkAnalyzer, CallChainAnalyzer
 from .generators import PoCGenerator
 from .reports import ReportGenerator
 
-__version__ = '1.0.0'
+__version__ = '1.1.2'
 __author__ = 'Code Audit Tool'
 
 __all__ = [

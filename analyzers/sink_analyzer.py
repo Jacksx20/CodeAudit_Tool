@@ -271,15 +271,15 @@ class SinkAnalyzer:
         """检查函数调用参数是否包含用户输入或字符串拼接"""
         # 检查位置参数
         for arg in node.args:
-            if self._is_user_input(arg) or self._is_string_concat(arg):
+            if self._is_user_input(arg) or self._is_string_concat(arg) or self._is_variable(arg):
                 return True
-        
+
         # 检查关键字参数
         for keyword in node.keywords:
             if keyword.arg in ['query', 'sql', 'command', 'cmd', 'url', 'path', 'filename', 'data']:
-                if self._is_user_input(keyword.value) or self._is_string_concat(keyword.value):
+                if self._is_user_input(keyword.value) or self._is_string_concat(keyword.value) or self._is_variable(keyword.value):
                     return True
-        
+
         return False
     
     def _is_user_input(self, node) -> bool:
@@ -308,6 +308,14 @@ class SinkAnalyzer:
             func_name = self._get_call_name(node)
             if func_name in ['format', 'join']:
                 return True
+        return False
+
+    def _is_variable(self, node) -> bool:
+        """检查节点是否是变量引用"""
+        if isinstance(node, ast.Name):
+            return True
+        if isinstance(node, ast.Attribute):
+            return True
         return False
     
     def _node_to_string(self, node) -> str:
@@ -367,61 +375,93 @@ class SinkAnalyzer:
     
     def _analyze_python_with_regex(self, file_path: str, content: str, lines: List[str]):
         """使用正则表达式分析Python文件"""
-        # SQL注入模式
+        # SQL注入模式 - 改进版本,支持更多形式
         sql_patterns = [
-            r'execute\s*\([^)]*\+[^)]*\)',
-            r'execute\s*\([^)]*%[^)]*%[^)]*\)',
-            r'cursor\.execute\s*\([^)]*\+[^)]*\)',
-            r'\.raw\s*\([^)]*\+[^)]*\)',
+            r'execute\s*\([^)]*\+[^)]*\)',  # 字符串拼接
+            r'execute\s*\([^)]*%[^)]*%[^)]*\)',  # 格式化字符串
+            r'cursor\.execute\s*\([^)]*\+[^)]*\)',  # cursor.execute
+            r'\.raw\s*\([^)]*\+[^)]*\)',  # Django raw
+            r'execute\s*\([^)]*f[\'"][^)]*\{[^\}]+\}[^)]*\)',  # f-string
+            r'execute\s*\([^)]*\w+\s*\+\s*\w+[^)]*\)',  # 变量拼接
+            r'execute\s*\([^)]*\.format\s*\([^)]*\)[^)]*\)',  # format方法
         ]
-        
+
         for pattern in sql_patterns:
             for match in re.finditer(pattern, content):
                 self._add_sink_from_match(match, file_path, lines, 'sql_injection', 'execute')
-        
-        # 命令注入模式
+
+        # 命令注入模式 - 改进版本
         cmd_patterns = [
-            r'os\.system\s*\([^)]*\+[^)]*\)',
-            r'os\.popen\s*\([^)]*\+[^)]*\)',
-            r'subprocess\.\w+\s*\([^)]*shell\s*=\s*True[^)]*\)',
-            r'eval\s*\([^)]*\)',
-            r'exec\s*\([^)]*\)',
+            r'os\.system\s*\([^)]*\+[^)]*\)',  # 字符串拼接
+            r'os\.system\s*\([^)]*\w+\s*\)',  # 变量
+            r'os\.popen\s*\([^)]*\+[^)]*\)',  # popen拼接
+            r'os\.popen\s*\([^)]*\w+\s*\)',  # popen变量
+            r'subprocess\.\w+\s*\([^)]*shell\s*=\s*True[^)]*\)',  # shell=True
+            r'eval\s*\([^)]*\)',  # eval
+            r'exec\s*\([^)]*\)',  # exec
         ]
-        
+
         for pattern in cmd_patterns:
             for match in re.finditer(pattern, content):
                 self._add_sink_from_match(match, file_path, lines, 'command_injection', 'system')
-        
-        # 路径遍历模式
+
+        # 路径遍历模式 - 改进版本
         path_patterns = [
-            r'open\s*\([^)]*\+[^)]*\)',
-            r'send_file\s*\([^)]*\+[^)]*\)',
+            r'open\s*\([^)]*\+[^)]*\)',  # 字符串拼接
+            r'open\s*\([^)]*\w+\s*\)',  # 变量
+            r'send_file\s*\([^)]*\+[^)]*\)',  # send_file拼接
+            r'send_file\s*\([^)]*\w+\s*\)',  # send_file变量
         ]
-        
+
         for pattern in path_patterns:
             for match in re.finditer(pattern, content):
                 self._add_sink_from_match(match, file_path, lines, 'path_traversal', 'open')
-        
-        # SSRF模式
+
+        # SSRF模式 - 改进版本
         ssrf_patterns = [
-            r'urllib\.request\.urlopen\s*\([^)]*\+[^)]*\)',
-            r'requests\.\w+\s*\([^)]*\+[^)]*\)',
+            r'urllib\.request\.urlopen\s*\([^)]*\+[^)]*\)',  # urlopen拼接
+            r'urllib\.request\.urlopen\s*\([^)]*\w+\s*\)',  # urlopen变量
+            r'requests\.\w+\s*\([^)]*\+[^)]*\)',  # requests拼接
+            r'requests\.\w+\s*\([^)]*\w+\s*\)',  # requests变量
         ]
-        
+
         for pattern in ssrf_patterns:
             for match in re.finditer(pattern, content):
                 self._add_sink_from_match(match, file_path, lines, 'ssrf', 'urlopen')
-        
-        # 反序列化模式
-        deserial_patterns = [
-            r'pickle\.loads\s*\([^)]*\)',
-            r'yaml\.load\s*\([^)]*Loader\s*=\s*yaml\.Loader[^)]*\)',
-            r'yaml\.unsafe_load\s*\([^)]*\)',
+
+        # XSS模式
+        xss_patterns = [
+            r'render_template_string\s*\([^)]*\+[^)]*\)',  # 拼接
+            r'render_template_string\s*\([^)]*\w+\s*\)',  # 变量
+            r'render_template_string\s*\([^)]*f[\'"][^)]*\{[^\}]+\}[^)]*\)',  # f-string
         ]
-        
+
+        for pattern in xss_patterns:
+            for match in re.finditer(pattern, content):
+                self._add_sink_from_match(match, file_path, lines, 'xss', 'render_template_string')
+
+        # 反序列化模式 - 改进版本
+        deserial_patterns = [
+            r'pickle\.loads\s*\([^)]*\)',  # pickle.loads
+            r'pickle\.load\s*\([^)]*\)',  # pickle.load
+            r'yaml\.load\s*\([^)]*Loader\s*=\s*yaml\.Loader[^)]*\)',  # yaml.load
+            r'yaml\.load\s*\([^)]*\)',  # yaml.load通用
+            r'yaml\.unsafe_load\s*\([^)]*\)',  # yaml.unsafe_load
+        ]
+
         for pattern in deserial_patterns:
             for match in re.finditer(pattern, content):
                 self._add_sink_from_match(match, file_path, lines, 'deserialization', 'loads')
+
+        # 代码注入模式
+        code_injection_patterns = [
+            r'eval\s*\([^)]*\)',  # eval
+            r'exec\s*\([^)]*\)',  # exec
+        ]
+
+        for pattern in code_injection_patterns:
+            for match in re.finditer(pattern, content):
+                self._add_sink_from_match(match, file_path, lines, 'code_injection', 'eval')
     
     def _add_sink_from_match(self, match, file_path: str, lines: List[str], 
                             vuln_type: str, func_name: str):

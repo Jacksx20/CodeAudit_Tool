@@ -434,11 +434,15 @@ class SinkAnalyzer:
             r'render_template_string\s*\([^)]*\+[^)]*\)',  # 拼接
             r'render_template_string\s*\([^)]*\w+\s*\)',  # 变量
             r'render_template_string\s*\([^)]*f[\'"][^)]*\{[^\}]+\}[^)]*\)',  # f-string
+            r'return\s+f[\'"][^"]*\{[^\}]+\}[^"]*\)',  # return f-string with user input
+            r'return\s+[\'"]<[^>]*>\s*\{[^\}]+\}\s*</[^>]*>[\'"]',  # return HTML with variable
+            r'\w+\s*=\s*f[\'"][^"]*<[^>]*>\s*\{[^\}]+\}\s*</[^>]*>[^"]*[\'"]',  # variable = f-string HTML
+            r'<div[^>]*>\{[^\}]+\}</div>',  # HTML div with variable
         ]
 
         for pattern in xss_patterns:
             for match in re.finditer(pattern, content):
-                self._add_sink_from_match(match, file_path, lines, 'xss', 'render_template_string')
+                self._add_sink_from_match(match, file_path, lines, 'xss', 'f-string')
 
         # 反序列化模式 - 改进版本
         deserial_patterns = [

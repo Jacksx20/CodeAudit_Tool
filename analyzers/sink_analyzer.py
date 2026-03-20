@@ -102,6 +102,41 @@ class SinkAnalyzer:
             {'name': 'loads', 'modules': ['marshal']},
         ]
         
+        # 代码注入危险函数
+        functions_map['code_injection'] = [
+            {'name': 'eval', 'modules': ['builtins']},
+            {'name': 'exec', 'modules': ['builtins']},
+            {'name': 'compile', 'modules': ['builtins']},
+            {'name': '__import__', 'modules': ['builtins']},
+        ]
+        
+        # XXE危险函数 (XML注入)
+        functions_map['xml_injection'] = [
+            {'name': 'parse', 'modules': ['xml.etree.ElementTree']},
+            {'name': 'fromstring', 'modules': ['xml.etree.ElementTree']},
+            {'name': 'parseString', 'modules': ['xml.dom.minidom']},
+            {'name': 'parse', 'modules': ['xml.dom.minidom']},
+            {'name': 'SAXParser', 'modules': ['xml.sax']},
+            {'name': 'DocumentBuilder', 'modules': ['xml.parsers.expat']},
+        ]
+        
+        # LDAP注入危险函数
+        functions_map['ldap_injection'] = [
+            {'name': 'search', 'modules': ['ldap']},
+            {'name': 'search_s', 'modules': ['ldap']},
+            {'name': 'search_st', 'modules': ['ldap']},
+            {'name': 'bind', 'modules': ['ldap']},
+            {'name': 'simple_bind', 'modules': ['ldap']},
+        ]
+        
+        # 开放重定向危险函数
+        functions_map['open_redirect'] = [
+            {'name': 'redirect', 'modules': ['flask', 'django.http']},
+            {'name': 'HttpResponseRedirect', 'modules': ['django.http']},
+            {'name': 'redirect_to', 'modules': ['django.shortcuts']},
+            {'name': 'header', 'modules': ['flask', 'bottle']},
+        ]
+        
         return functions_map
     
     def analyze(self, target_path: str) -> List[SinkPoint]:

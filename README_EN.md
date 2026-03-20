@@ -449,6 +449,62 @@ SourcePattern(
 
 ## Changelog
 
+### v1.1.2 (2026-03-20)
+
+#### New Features
+- ✨ Completed vulnerability rule library, added 4 new vulnerability type rule files (code_injection, xxe, ldap_injection, open_redirect)
+- ✨ Added comprehensive vulnerability rule library documentation (`rules/vulnerabilities/README.md`)
+- ✨ Added English README documentation (`README_EN.md`), providing complete English documentation support
+- ✨ Added language switching links in both Chinese and English READMEs for easy language switching
+
+#### Optimizations
+- 🔧 Enhanced Sink analyzer, fully supporting all 10 vulnerability type detections
+  - Added code injection detection (eval, exec, compile, __import__)
+  - Added XXE/XML injection detection (xml.etree.ElementTree, xml.dom.minidom, etc.)
+  - Added LDAP injection detection (search, search_s, search_st, bind, simple_bind)
+  - Added open redirect detection (redirect, HttpResponseRedirect, redirect_to, header)
+- 🔧 Improved PoC file naming format to match README specification (`poc_VULN-ID_vuln_type.py`)
+- 🔧 Optimized rule file organization structure, unified rule file location to `rules/vulnerabilities/` directory
+
+#### Fixes
+- 🐛 Fixed Sink analyzer missing support for some vulnerability types
+- 🐛 Fixed PoC file naming format inconsistency with README
+- 🐛 Fixed scattered rule file storage causing management difficulties
+
+#### Technical Improvements
+- ⚡ Optimized Sink analyzer `_build_dangerous_functions_map` method
+- ⚡ Added dangerous function mappings for 4 new vulnerability types
+- ⚡ Completed severity mapping, ensuring all vulnerability types have correct severity levels
+- ⚡ Improved rule file loading mechanism, automatically scans `rules/vulnerabilities/` directory
+
+#### Documentation Updates
+- 📝 Added comprehensive vulnerability rule library documentation
+- 📝 Added English README with complete feature descriptions and usage guide
+- 📝 Added language switching links in both README files
+- 📝 Updated project structure description to reflect latest file organization
+- 📝 Enhanced vulnerability type description table
+
+#### Testing & Validation
+- ✅ Verified all 10 vulnerability types have corresponding rule files
+- ✅ Verified Sink analyzer fully supports all vulnerability type detections
+- ✅ Verified PoC file naming format is correct
+- ✅ Verified Chinese and English README links work properly
+- ✅ Verified rule file loading mechanism works normally
+
+#### Rule Library Completeness
+- ✅ sql_injection - SQL Injection (5 database types supported)
+- ✅ command_injection - Command Injection (3 operating systems supported)
+- ✅ code_injection - Code Injection (3 programming languages supported)
+- ✅ deserialization - Deserialization (6 formats supported)
+- ✅ path_traversal - Path Traversal (3 systems + bypass supported)
+- ✅ ssrf - Server-Side Request Forgery (4 scenarios supported)
+- ✅ xss - Cross-Site Scripting (4 types + bypass supported)
+- ✅ xxe - XML External Entity Injection (4 attack methods)
+- ✅ ldap_injection - LDAP Injection (3 exploitation methods)
+- ✅ open_redirect - Open Redirect (4 bypass techniques)
+
+---
+
 ### v1.1.1 (2026-03-19)
 
 #### New Features
@@ -613,3 +669,8 @@ Contributions are welcome! Please feel free to submit a Pull Request.
 
 For questions and suggestions, please open an issue on GitHub.
 
+---
+
+**Version**: 1.0.2
+**Last Updated**: 2026-03-19
+**Status**: Stable ✅

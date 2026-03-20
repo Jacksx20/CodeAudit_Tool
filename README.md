@@ -521,6 +521,55 @@ MIT License
 
 ## 更新日志
 
+### v1.1.2 (2026-03-20)
+
+#### 新增功能
+- ✨ 完善漏洞规则库，新增4种漏洞类型规则文件（code_injection, xxe, ldap_injection, open_redirect）
+- ✨ 添加漏洞规则库完整文档（`rules/vulnerabilities/README.md`）
+- ✨ 新增英文版README文档（`README_EN.md`），提供完整的英文文档支持
+- ✨ 在中英文README中添加语言切换链接，方便用户切换语言版本
+
+#### 优化改进
+- 🔧 增强Sink分析器，完整支持所有10种漏洞类型检测
+  - 新增代码注入检测（eval, exec, compile, __import__）
+  - 新增XXE/XML注入检测（xml.etree.ElementTree, xml.dom.minidom等）
+  - 新增LDAP注入检测（search, search_s, search_st, bind, simple_bind）
+  - 新增开放重定向检测（redirect, HttpResponseRedirect, redirect_to, header）
+- 🔧 完善PoC文件命名格式，符合README规范（`poc_VULN-ID_vuln_type.py`）
+- 🔧 优化规则文件组织结构，统一规则文件位置到 `rules/vulnerabilities/` 目录
+
+#### 修复内容
+- 🐛 修复Sink分析器缺少部分漏洞类型支持的问题
+- 🐛 修复PoC文件命名格式与README不一致的问题
+- 🐛 修复规则文件分散存储导致管理困难的问题
+
+#### 技术改进
+- ⚡ 优化Sink分析器 `_build_dangerous_functions_map` 方法
+- ⚡ 新增4种漏洞类型的危险函数映射
+- ⚡ 完善严重程度映射，确保所有漏洞类型都有正确的严重程度
+- ⚡ 改进规则文件加载机制，自动扫描 `rules/vulnerabilities/` 目录
+
+#### 文档更新
+- 📝 新增完整的漏洞规则库文档
+- 📝 新增英文版README，包含所有功能说明和使用指南
+- 📝 在两个README文件中添加语言切换链接
+- 📝 更新项目结构说明，反映最新的文件组织
+- 📝 完善漏洞类型说明表格
+
+#### 规则库完整性
+- ✅ sql_injection - SQL注入（5种数据库支持）
+- ✅ command_injection - 命令注入（3种操作系统支持）
+- ✅ code_injection - 代码注入（3种编程语言支持）
+- ✅ deserialization - 反序列化（6种格式支持）
+- ✅ path_traversal - 路径遍历（3种系统+绕过支持）
+- ✅ ssrf - 服务端请求伪造（4种场景支持）
+- ✅ xss - 跨站脚本（4种类型+绕过支持）
+- ✅ xxe - XML外部实体注入（4种攻击方式）
+- ✅ ldap_injection - LDAP注入（3种利用方式）
+- ✅ open_redirect - 开放重定向（4种绕过技术）
+
+---
+
 ### v1.1.1 (2026-03-19)
 
 #### 新增功能

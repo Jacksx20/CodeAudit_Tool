@@ -5,8 +5,13 @@
 """
 import os
 import sys
+from pathlib import Path
 
-sys.path.insert(0, os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), 'code_audit_tool'))
+# 添加项目路径
+root = Path(__file__).resolve()
+while not (root / "core").exists():
+    root = root.parent
+sys.path.insert(0, str(root))
 
 from core.config import Config
 from analyzers.sink_analyzer import SinkAnalyzer

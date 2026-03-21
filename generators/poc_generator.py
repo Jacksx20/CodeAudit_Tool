@@ -30,13 +30,13 @@ class PoCGenerator:
     def _load_payloads(self):
         """加载payload库"""
         self.payloads = {}
-        
+
         # 加载各漏洞类型的payload
-        sources_dir = os.path.join(self.config.rules_dir, 'sources')
-        if os.path.exists(sources_dir):
-            for filename in os.listdir(sources_dir):
+        vulnerabilities_dir = os.path.join(self.config.rules_dir, 'vulnerabilities')
+        if os.path.exists(vulnerabilities_dir):
+            for filename in os.listdir(vulnerabilities_dir):
                 if filename.endswith('.json'):
-                    filepath = os.path.join(sources_dir, filename)
+                    filepath = os.path.join(vulnerabilities_dir, filename)
                     try:
                         with open(filepath, 'r', encoding='utf-8') as f:
                             data = json.load(f)
@@ -404,6 +404,3 @@ if __name__ == "__main__":
     chain.run()
 '''
         return script
-
-
-

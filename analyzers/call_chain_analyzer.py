@@ -2,13 +2,15 @@
 """
 调用链分析器 - 构建完整的source→sink调用链
 支持正向审计和反向审计
+增强功能：变量追踪、数据流分析、污点传播
 """
 import os
 import re
 import ast
-from typing import List, Dict, Optional, Set, Tuple
+from typing import List, Dict, Optional, Set, Tuple, Any
 from collections import defaultdict
 from pathlib import Path
+from dataclasses import dataclass, field
 
 import sys
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
@@ -19,14 +21,64 @@ from core.config import (
 )
 
 
+@dataclass
+class VariableInfo:
+    """变量信息"""
+    name: str                           # 变量名
+    source: str                         # 来源：'user_input', 'literal', 'param', 'unknown'
+    taint_sources: List[str] = field(default_factory=list)  # 污点来源
+    is_tainted: bool = False            # 是否被污染
+    line_number: int = 0                # 定义行号
+    value_type: str = 'unknown'         # 值类型
+
+
+@dataclass
+class DataFlowNode:
+    """数据流节点"""
+    var_name: str                       # 变量名
+    operation: str                      # 操作类型：'assign', 'call', 'return', 'param'
+    source_line: int                    # 源行号
+    source_var: Optional[str] = None    # 源变量
+    target_var: Optional[str] = None    # 目标变量
+    is_tainted: bool = False            # 是否污染
+    taint_propagated: bool = False      # 污点是否已传播
+
+
 class CallChainAnalyzer:
-    """调用链分析器"""
+    """调用链分析器 - 增强版"""
     
     def __init__(self, config: Config):
         self.config = config
         self.call_graph: Dict[str, List[str]] = defaultdict(list)  # 函数调用图
         self.function_definitions: Dict[str, Tuple[str, int, List[str]]] = {}  # 函数定义信息
         self.reverse_call_graph: Dict[str, List[str]] = defaultdict(list)  # 反向调用图
+        
+        # 新增：变量追踪相关
+        self.variable_states: Dict[str, Dict[str, VariableInfo]] = {}  # 文件 -> {变量名 -> 变量信息}
+        self.data_flows: Dict[str, List[DataFlowNode]] = {}  # 函数键 -> 数据流节点列表
+        self.tainted_variables: Dict[str, Set[str]] = defaultdict(set)  # 函数键 -> 污染变量集合
+        
+        # 用户输入模式
+        self.user_input_patterns = [
+            'request.args', 'request.form', 'request.json', 'request.data',
+            'request.GET', 'request.POST', 'request.body', 'request.values',
+            'req.query', 'req.body', 'req.params',
+            '$_GET', '$_POST', '$_REQUEST', '$_FILES',
+            'c.Query', 'c.PostForm', 'c.Param',
+            'input()', 'sys.argv', 'os.environ',
+        ]
+        
+        # 净化函数模式
+        self.sanitization_functions = {
+            'escape', 'htmlspecialchars', 'htmlentities', 'strip_tags',
+            'mysqli_real_escape_string', 'mysql_real_escape_string',
+            'pg_escape_string', 'sqlite_escape_string',
+            'filter_input', 'filter_var', 'sanitize', 'clean',
+            'escape_string', 'quote', 'prepare',
+            'mark_safe', 'safe', 'escape_js', 'escape_html',
+            'urllib.parse.quote', 'urllib.quote', 'url_encode',
+            're.escape', 'shlex.quote', 'pipes.quote',
+        }
         
     def analyze(self, target_path: str, sources: List[SourcePoint], 
                 sinks: List[SinkPoint]) -> List[Vulnerability]:
@@ -158,7 +210,7 @@ class CallChainAnalyzer:
                         self._build_go_call_graph(file_path)
     
     def _build_python_call_graph(self, file_path: str):
-        """构建Python文件的调用图"""
+        """构建Python文件的调用图 - 增强版，包含变量追踪"""
         try:
             with open(file_path, 'r', encoding='utf-8', errors='ignore') as f:
                 content = f.read()
@@ -170,6 +222,10 @@ class CallChainAnalyzer:
             tree = ast.parse(content)
         except SyntaxError:
             return
+        
+        # 初始化文件的变量状态
+        if file_path not in self.variable_states:
+            self.variable_states[file_path] = {}
         
         # 收集函数定义
         for node in ast.walk(tree):
@@ -190,9 +246,224 @@ class CallChainAnalyzer:
                             calls.append(call_name)
                 
                 self.call_graph[func_key] = calls
+                
+                # 新增：分析函数内的变量追踪和数据流
+                self._analyze_function_variables(node, func_key, file_path, lines)
         
         # 构建跨文件的调用关系
         self._resolve_cross_file_calls(file_path, content)
+    
+    def _analyze_function_variables(self, func_node, func_key: str, file_path: str, lines: List[str]):
+        """分析函数内的变量追踪和数据流"""
+        data_flow_nodes = []
+        local_vars = {}
+        
+        # 处理函数参数 - 参数可能是污染源
+        for arg in func_node.args.args:
+            var_info = VariableInfo(
+                name=arg.arg,
+                source='param',
+                is_tainted=True,  # 参数默认视为可能被污染
+                taint_sources=[f'param:{arg.arg}'],
+                line_number=func_node.lineno,
+                value_type='unknown'
+            )
+            local_vars[arg.arg] = var_info
+            self.tainted_variables[func_key].add(arg.arg)
+        
+        # 遍历函数体，追踪变量赋值和数据流
+        for stmt in ast.walk(func_node):
+            # 处理赋值语句
+            if isinstance(stmt, ast.Assign):
+                for target in stmt.targets:
+                    if isinstance(target, ast.Name):
+                        var_name = target.id
+                        var_info = self._analyze_assignment(stmt.value, var_name, stmt.lineno, local_vars, func_key)
+                        local_vars[var_name] = var_info
+                        
+                        # 记录数据流
+                        df_node = DataFlowNode(
+                            var_name=var_name,
+                            operation='assign',
+                            source_line=stmt.lineno,
+                            is_tainted=var_info.is_tainted
+                        )
+                        data_flow_nodes.append(df_node)
+            
+            # 处理增强赋值 (+=, -= 等)
+            elif isinstance(stmt, ast.AugAssign):
+                if isinstance(stmt.target, ast.Name):
+                    var_name = stmt.target.id
+                    # 增强赋值保持原有污点状态
+                    if var_name in local_vars and local_vars[var_name].is_tainted:
+                        self.tainted_variables[func_key].add(var_name)
+            
+            # 处理函数调用中的变量传递
+            elif isinstance(stmt, ast.Call):
+                self._analyze_call_arguments(stmt, func_key, local_vars, stmt.lineno, data_flow_nodes)
+        
+        # 保存数据流信息
+        self.data_flows[func_key] = data_flow_nodes
+        
+        # 更新文件的变量状态
+        self.variable_states[file_path].update(local_vars)
+    
+    def _analyze_assignment(self, value_node, var_name: str, line_num: int, 
+                           local_vars: Dict, func_key: str) -> VariableInfo:
+        """分析赋值语句右侧表达式"""
+        is_tainted = False
+        taint_sources = []
+        source = 'unknown'
+        value_type = 'unknown'
+        
+        # 检查是否是用户输入
+        if self._is_user_input_node(value_node):
+            is_tainted = True
+            taint_sources.append('user_input')
+            source = 'user_input'
+        
+        # 检查是否是字面量
+        elif isinstance(value_node, (ast.Constant, ast.Str, ast.Num)):
+            source = 'literal'
+            is_tainted = False
+            value_type = type(value_node.value).__name__ if hasattr(value_node, 'value') else 'str'
+        
+        # 检查是否是变量引用
+        elif isinstance(value_node, ast.Name):
+            ref_var = value_node.id
+            if ref_var in local_vars:
+                is_tainted = local_vars[ref_var].is_tainted
+                taint_sources = local_vars[ref_var].taint_sources.copy()
+                source = local_vars[ref_var].source
+            elif ref_var in self.tainted_variables[func_key]:
+                is_tainted = True
+                taint_sources.append(f'var:{ref_var}')
+        
+        # 检查是否是属性访问 (如 request.args.get())
+        elif isinstance(value_node, ast.Attribute):
+            attr_str = self._node_to_string(value_node)
+            if self._is_user_input_pattern(attr_str):
+                is_tainted = True
+                taint_sources.append(f'user_input:{attr_str}')
+                source = 'user_input'
+        
+        # 检查是否是函数调用
+        elif isinstance(value_node, ast.Call):
+            call_name = self._get_call_name(value_node)
+            if call_name:
+                # 检查是否是净化函数
+                if self._is_sanitization_function(call_name):
+                    is_tainted = False  # 净化后不再污染
+                    source = 'sanitized'
+                else:
+                    # 检查参数是否被污染
+                    for arg in value_node.args:
+                        if isinstance(arg, ast.Name) and arg.id in local_vars:
+                            if local_vars[arg.id].is_tainted:
+                                is_tainted = True
+                                taint_sources.extend(local_vars[arg.id].taint_sources)
+                                break
+        
+        # 检查是否是二元操作 (字符串拼接等)
+        elif isinstance(value_node, ast.BinOp):
+            # 检查操作数是否被污染
+            for operand in [value_node.left, value_node.right]:
+                if isinstance(operand, ast.Name) and operand.id in local_vars:
+                    if local_vars[operand.id].is_tainted:
+                        is_tainted = True
+                        taint_sources.extend(local_vars[operand.id].taint_sources)
+                elif isinstance(operand, ast.Attribute):
+                    attr_str = self._node_to_string(operand)
+                    if self._is_user_input_pattern(attr_str):
+                        is_tainted = True
+                        taint_sources.append(f'user_input:{attr_str}')
+        
+        # 检查是否是f-string
+        elif isinstance(value_node, ast.JoinedStr):
+            for value in value_node.values:
+                if isinstance(value, ast.FormattedValue):
+                    if isinstance(value.value, ast.Name) and value.value.id in local_vars:
+                        if local_vars[value.value.id].is_tainted:
+                            is_tainted = True
+                            taint_sources.extend(local_vars[value.value.id].taint_sources)
+        
+        # 如果被污染，添加到污染变量集合
+        if is_tainted:
+            self.tainted_variables[func_key].add(var_name)
+        
+        return VariableInfo(
+            name=var_name,
+            source=source,
+            taint_sources=taint_sources,
+            is_tainted=is_tainted,
+            line_number=line_num,
+            value_type=value_type
+        )
+    
+    def _analyze_call_arguments(self, call_node: ast.Call, func_key: str, 
+                               local_vars: Dict, line_num: int, data_flow_nodes: List):
+        """分析函数调用中的参数传递"""
+        call_name = self._get_call_name(call_node)
+        if not call_name:
+            return
+        
+        # 检查每个参数
+        for i, arg in enumerate(call_node.args):
+            if isinstance(arg, ast.Name):
+                var_name = arg.id
+                if var_name in local_vars and local_vars[var_name].is_tainted:
+                    # 记录污染数据流
+                    df_node = DataFlowNode(
+                        var_name=var_name,
+                        operation='call_arg',
+                        source_line=line_num,
+                        target_var=f'{call_name}:arg{i}',
+                        is_tainted=True
+                    )
+                    data_flow_nodes.append(df_node)
+    
+    def _is_user_input_node(self, node) -> bool:
+        """检查节点是否是用户输入"""
+        node_str = self._node_to_string(node)
+        return self._is_user_input_pattern(node_str)
+    
+    def _is_user_input_pattern(self, text: str) -> bool:
+        """检查文本是否匹配用户输入模式"""
+        for pattern in self.user_input_patterns:
+            if pattern in text:
+                return True
+        return False
+    
+    def _is_sanitization_function(self, func_name: str) -> bool:
+        """检查是否是净化函数"""
+        # 检查函数名
+        if func_name in self.sanitization_functions:
+            return True
+        # 检查函数名是否包含净化相关关键词
+        sanitize_keywords = ['escape', 'sanitize', 'clean', 'filter', 'quote', 'safe']
+        for keyword in sanitize_keywords:
+            if keyword in func_name.lower():
+                return True
+        return False
+    
+    def _node_to_string(self, node) -> str:
+        """将AST节点转换为字符串"""
+        try:
+            return ast.unparse(node)
+        except:
+            return ""
+    
+    def get_tainted_variables(self, func_key: str) -> Set[str]:
+        """获取函数中的所有污染变量"""
+        return self.tainted_variables.get(func_key, set())
+    
+    def get_variable_info(self, file_path: str, var_name: str) -> Optional[VariableInfo]:
+        """获取变量信息"""
+        return self.variable_states.get(file_path, {}).get(var_name)
+    
+    def is_variable_tainted(self, func_key: str, var_name: str) -> bool:
+        """检查变量是否被污染"""
+        return var_name in self.tainted_variables.get(func_key, set())
     
     def _get_call_name(self, node: ast.Call) -> Optional[str]:
         """获取函数调用名称"""

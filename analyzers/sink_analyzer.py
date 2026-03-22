@@ -2,6 +2,7 @@
 """
 Sink点分析器 - 检测危险函数调用
 支持SQL注入、命令注入、路径遍历、SSRF、XSS、反序列化等漏洞
+增强功能：净化检测、污点传播分析
 """
 import os
 import re
@@ -16,7 +17,7 @@ from core.config import SinkPoint, VulnerabilityType, Severity, Config
 
 
 class SinkAnalyzer:
-    """Sink点分析器"""
+    """Sink点分析器 - 增强版"""
     
     def __init__(self, config: Config):
         self.config = config
@@ -37,6 +38,90 @@ class SinkAnalyzer:
             VulnerabilityType.LDAP_INJECTION: Severity.HIGH,
             VulnerabilityType.XML_INJECTION: Severity.HIGH,
             VulnerabilityType.OPEN_REDIRECT: Severity.MEDIUM,
+        }
+        
+        # 净化函数映射 - 按漏洞类型分类
+        self.sanitization_functions = self._build_sanitization_map()
+        
+        # 已净化的变量追踪
+        self.sanitized_vars: Dict[str, Set[str]] = {}  # 文件路径 -> 已净化变量集合
+    
+    def _build_sanitization_map(self) -> Dict[str, Dict[str, List[str]]]:
+        """构建净化函数映射表"""
+        return {
+            'sql_injection': {
+                'python': [
+                    'escape_string', 'mysql_real_escape_string', 'mysqli_real_escape_string',
+                    'pg_escape_string', 'sqlite_escape_string',
+                    'quote', 'quote_plus',  # urllib
+                ],
+                'php': [
+                    'mysqli_real_escape_string', 'mysql_real_escape_string',
+                    'pg_escape_string', 'sqlite_escape_string',
+                    'addslashes',  # 虽然不完美，但也是净化
+                ],
+                'javascript': [
+                    'escape', 'mysql.escape', 'mysql_real_escape_string',
+                ],
+                'java': [
+                    'escapeSql', 'StringEscapeUtils.escapeSql',
+                ],
+            },
+            'xss': {
+                'python': [
+                    'escape', 'html.escape', 'cgi.escape',
+                    'mark_safe', 'bleach.clean', 'bleach.linkify',
+                    'sanitize_html', 'clean_html',
+                ],
+                'php': [
+                    'htmlspecialchars', 'htmlentities', 'strip_tags',
+                    'esc_html', 'esc_attr', 'esc_js', 'esc_url',
+                    'xss_clean',
+                ],
+                'javascript': [
+                    'escape', 'encodeURI', 'encodeURIComponent',
+                    'DOMPurify.sanitize', 'sanitizeHtml',
+                ],
+                'java': [
+                    'escapeHtml', 'StringEscapeUtils.escapeHtml',
+                    'ESAPI.encoder().encodeForHTML',
+                ],
+            },
+            'command_injection': {
+                'python': [
+                    'shlex.quote', 'pipes.quote', 'quote',
+                ],
+                'php': [
+                    'escapeshellarg', 'escapeshellcmd',
+                ],
+                'javascript': [
+                    'shellEscape', 'quote',
+                ],
+            },
+            'path_traversal': {
+                'python': [
+                    'os.path.basename', 'os.path.normpath',
+                    'secure_filename',  # werkzeug
+                ],
+                'php': [
+                    'basename', 'realpath',
+                ],
+                'javascript': [
+                    'path.basename', 'path.normalize',
+                ],
+            },
+            'ssrf': {
+                'python': [
+                    'urllib.parse.quote', 'urllib.parse.urlparse',
+                    'validators.url',  # validators库
+                ],
+                'php': [
+                    'filter_var',  # FILTER_VALIDATE_URL
+                ],
+                'javascript': [
+                    'encodeURI', 'encodeURIComponent',
+                ],
+            },
         }
     
     def _build_dangerous_functions_map(self) -> Dict[str, List[Dict]]:
@@ -184,6 +269,8 @@ class SinkAnalyzer:
             self._analyze_go_file(file_path, content, lines)
         elif ext == '.php':
             self._analyze_php_file(file_path, content, lines)
+        elif ext == '.cs':
+            self._analyze_cs_file(file_path, content, lines)
     
     def _analyze_python_file(self, file_path: str, content: str, lines: List[str]):
         """分析Python文件"""
@@ -235,7 +322,7 @@ class SinkAnalyzer:
         return None
     
     def _is_dangerous_call(self, node: ast.Call, func_info: Dict, lines: List[str]) -> bool:
-        """检查函数调用是否真的危险"""
+        """检查函数调用是否真的危险 - 增强版，包含净化检测"""
         # 检查shell参数
         if func_info.get('check_shell'):
             for keyword in node.keywords:
@@ -258,6 +345,111 @@ class SinkAnalyzer:
         
         # 检查参数是否包含用户输入或字符串拼接
         return self._has_user_input_or_concat(node)
+    
+    def _is_sanitized(self, node, vuln_type: str, language: str = 'python') -> bool:
+        """检查变量是否已被净化"""
+        # 获取变量名
+        var_name = None
+        if isinstance(node, ast.Name):
+            var_name = node.id
+        elif isinstance(node, ast.Attribute):
+            var_name = self._node_to_string(node)
+        
+        if not var_name:
+            return False
+        
+        # 检查是否是净化函数的返回值
+        if isinstance(node, ast.Call):
+            call_name = self._get_call_name(node)
+            if call_name:
+                # 检查是否是净化函数
+                sanitize_funcs = self.sanitization_functions.get(vuln_type, {}).get(language, [])
+                if call_name in sanitize_funcs or any(s in call_name for s in sanitize_funcs):
+                    return True
+        
+        return False
+    
+    def _check_sanitization_in_context(self, var_name: str, content: str, 
+                                       vuln_type: str, language: str = 'python') -> Tuple[bool, str]:
+        """
+        检查变量在上下文中是否被净化
+        返回: (是否净化, 净化方式描述)
+        """
+        # 获取该漏洞类型的净化函数列表
+        sanitize_funcs = self.sanitization_functions.get(vuln_type, {}).get(language, [])
+        
+        # 构建净化模式
+        patterns = []
+        for func in sanitize_funcs:
+            # 净化函数调用模式: func($var) 或 var = func(var)
+            patterns.append(rf'{re.escape(func)}\s*\(\s*{re.escape(var_name)}\s*\)')
+            patterns.append(rf'{re.escape(var_name)}\s*=\s*{re.escape(func)}\s*\(')
+        
+        for pattern in patterns:
+            if re.search(pattern, content):
+                return True, f"变量 {var_name} 已通过净化函数处理"
+        
+        # 检查参数化查询（SQL注入专用）
+        if vuln_type == 'sql_injection':
+            # 检查是否使用参数化查询
+            param_patterns = [
+                r'execute\s*\([^)]*,\s*\[',  # execute(sql, [params])
+                r'execute\s*\([^)]*,\s*\(',  # execute(sql, (params,))
+                r'\.format\s*\(',  # 字符串格式化（需要进一步检查）
+                r'%s',  # 参数占位符
+                r'\?',  # 问号占位符
+                r':\w+',  # 命名参数占位符
+            ]
+            for pattern in param_patterns:
+                if re.search(pattern, content):
+                    return True, "使用参数化查询"
+        
+        # 检查类型转换（通用净化）
+        type_cast_patterns = [
+            rf'int\s*\(\s*{re.escape(var_name)}\s*\)',
+            rf'float\s*\(\s*{re.escape(var_name)}\s*\)',
+            rf'bool\s*\(\s*{re.escape(var_name)}\s*\)',
+        ]
+        for pattern in type_cast_patterns:
+            if re.search(pattern, content):
+                return True, f"变量 {var_name} 已通过类型转换处理"
+        
+        return False, ""
+    
+    def _analyze_sanitization_chain(self, node: ast.Call, content: str, 
+                                   vuln_type: str) -> Tuple[bool, str]:
+        """
+        分析净化链 - 检查数据流中的净化操作
+        返回: (是否净化, 净化描述)
+        """
+        # 获取所有参数
+        args_to_check = list(node.args)
+        for kw in node.keywords:
+            if kw.arg in ['query', 'sql', 'command', 'cmd', 'url', 'path', 'filename', 'data']:
+                args_to_check.append(kw.value)
+        
+        for arg in args_to_check:
+            arg_str = self._node_to_string(arg)
+            
+            # 检查是否是变量
+            if isinstance(arg, ast.Name):
+                var_name = arg.id
+                is_sanitized, desc = self._check_sanitization_in_context(
+                    var_name, content, vuln_type
+                )
+                if is_sanitized:
+                    return True, desc
+            
+            # 检查是否是净化函数调用
+            elif isinstance(arg, ast.Call):
+                call_name = self._get_call_name(arg)
+                if call_name:
+                    # 检查所有语言的净化函数
+                    for lang, funcs in self.sanitization_functions.get(vuln_type, {}).items():
+                        if call_name in funcs or any(f in call_name for f in funcs):
+                            return True, f"参数已通过 {call_name} 净化"
+        
+        return False, ""
     
     def _get_loader_name(self, node) -> Optional[str]:
         """获取YAML Loader名称"""
@@ -327,7 +519,7 @@ class SinkAnalyzer:
     
     def _create_sink_point(self, node: ast.Call, file_path: str, lines: List[str],
                           func_name: str, vuln_type: str, func_info: Dict) -> Optional[SinkPoint]:
-        """创建Sink点"""
+        """创建Sink点 - 增强版，包含净化检测"""
         try:
             vuln_enum = VulnerabilityType(vuln_type)
         except ValueError:
@@ -348,15 +540,28 @@ class SinkAnalyzer:
         # 获取修复建议
         remediation = self._get_remediation(vuln_enum)
         
+        # 检查净化状态
+        content = '\n'.join(lines)
+        is_sanitized, sanitize_desc = self._analyze_sanitization_chain(node, content, vuln_type)
+        
+        # 如果已净化，调整描述
+        description = f"检测到危险函数调用: {func_name}"
+        if is_sanitized:
+            description += f" (已净化: {sanitize_desc})"
+            # 降低严重程度
+            severity = Severity.LOW
+        else:
+            severity = self.severity_map.get(vuln_enum, Severity.MEDIUM)
+        
         return SinkPoint(
             file_path=file_path,
             line_number=line_num,
             function_name=func_name,
             vulnerability_type=vuln_enum,
-            severity=self.severity_map.get(vuln_enum, Severity.MEDIUM),
+            severity=severity,
             code_snippet=code_snippet,
             arguments=arguments,
-            description=f"检测到危险函数调用: {func_name}",
+            description=description,
             remediation=remediation
         )
     
@@ -579,13 +784,35 @@ class SinkAnalyzer:
                 self._add_sink_from_match(match, file_path, lines, vuln_type, func_name)
     
     def _analyze_php_file(self, file_path: str, content: str, lines: List[str]):
-        """分析PHP文件"""
+        """分析PHP文件 - 增强版，支持Laravel和Symfony"""
         # 命令注入
         patterns = [
             (r'exec\s*\([^)]*\.\s*\$_', 'command_injection', 'exec'),
             (r'system\s*\([^)]*\.\s*\$_', 'command_injection', 'system'),
             (r'passthru\s*\([^)]*\.\s*\$_', 'command_injection', 'passthru'),
             (r'shell_exec\s*\([^)]*\.\s*\$_', 'command_injection', 'shell_exec'),
+            (r'proc_open\s*\([^)]*\.\s*\$_', 'command_injection', 'proc_open'),
+            # Laravel: Process::run($cmd)
+            (r'Process::run\s*\([^)]*\
+    
+    def get_sinks_by_type(self, vuln_type: VulnerabilityType) -> List[SinkPoint]:
+        """按漏洞类型获取Sink点"""
+        return [s for s in self.sinks if s.vulnerability_type == vuln_type]
+    
+    def get_sinks_by_file(self, file_path: str) -> List[SinkPoint]:
+        """按文件获取Sink点"""
+        return [s for s in self.sinks if s.file_path == file_path]
+, 'command_injection', 'Process::run'),
+            (r'Process::fromShellCommandline\s*\([^)]*\
+    
+    def get_sinks_by_type(self, vuln_type: VulnerabilityType) -> List[SinkPoint]:
+        """按漏洞类型获取Sink点"""
+        return [s for s in self.sinks if s.vulnerability_type == vuln_type]
+    
+    def get_sinks_by_file(self, file_path: str) -> List[SinkPoint]:
+        """按文件获取Sink点"""
+        return [s for s in self.sinks if s.file_path == file_path]
+, 'command_injection', 'Process::fromShellCommandline'),
         ]
         
         for pattern, vuln_type, func_name in patterns:
@@ -596,6 +823,89 @@ class SinkAnalyzer:
         patterns = [
             (r'mysql_query\s*\([^)]*\.\s*\$_', 'sql_injection', 'mysql_query'),
             (r'mysqli_query\s*\([^)]*\.\s*\$_', 'sql_injection', 'mysqli_query'),
+            (r'pg_query\s*\([^)]*\.\s*\$_', 'sql_injection', 'pg_query'),
+            # Laravel Eloquent raw
+            (r'DB::raw\s*\([^)]*\
+    
+    def get_sinks_by_type(self, vuln_type: VulnerabilityType) -> List[SinkPoint]:
+        """按漏洞类型获取Sink点"""
+        return [s for s in self.sinks if s.vulnerability_type == vuln_type]
+    
+    def get_sinks_by_file(self, file_path: str) -> List[SinkPoint]:
+        """按文件获取Sink点"""
+        return [s for s in self.sinks if s.file_path == file_path]
+, 'sql_injection', 'DB::raw'),
+            (r'DB::select\s*\([^)]*\
+    
+    def get_sinks_by_type(self, vuln_type: VulnerabilityType) -> List[SinkPoint]:
+        """按漏洞类型获取Sink点"""
+        return [s for s in self.sinks if s.vulnerability_type == vuln_type]
+    
+    def get_sinks_by_file(self, file_path: str) -> List[SinkPoint]:
+        """按文件获取Sink点"""
+        return [s for s in self.sinks if s.file_path == file_path]
+, 'sql_injection', 'DB::select'),
+            (r'DB::statement\s*\([^)]*\
+    
+    def get_sinks_by_type(self, vuln_type: VulnerabilityType) -> List[SinkPoint]:
+        """按漏洞类型获取Sink点"""
+        return [s for s in self.sinks if s.vulnerability_type == vuln_type]
+    
+    def get_sinks_by_file(self, file_path: str) -> List[SinkPoint]:
+        """按文件获取Sink点"""
+        return [s for s in self.sinks if s.file_path == file_path]
+, 'sql_injection', 'DB::statement'),
+            (r'->whereRaw\s*\([^)]*\
+    
+    def get_sinks_by_type(self, vuln_type: VulnerabilityType) -> List[SinkPoint]:
+        """按漏洞类型获取Sink点"""
+        return [s for s in self.sinks if s.vulnerability_type == vuln_type]
+    
+    def get_sinks_by_file(self, file_path: str) -> List[SinkPoint]:
+        """按文件获取Sink点"""
+        return [s for s in self.sinks if s.file_path == file_path]
+, 'sql_injection', 'whereRaw'),
+            (r'->orderByRaw\s*\([^)]*\
+    
+    def get_sinks_by_type(self, vuln_type: VulnerabilityType) -> List[SinkPoint]:
+        """按漏洞类型获取Sink点"""
+        return [s for s in self.sinks if s.vulnerability_type == vuln_type]
+    
+    def get_sinks_by_file(self, file_path: str) -> List[SinkPoint]:
+        """按文件获取Sink点"""
+        return [s for s in self.sinks if s.file_path == file_path]
+, 'sql_injection', 'orderByRaw'),
+            # Symfony Doctrine
+            (r'createQuery\s*\([^)]*\
+    
+    def get_sinks_by_type(self, vuln_type: VulnerabilityType) -> List[SinkPoint]:
+        """按漏洞类型获取Sink点"""
+        return [s for s in self.sinks if s.vulnerability_type == vuln_type]
+    
+    def get_sinks_by_file(self, file_path: str) -> List[SinkPoint]:
+        """按文件获取Sink点"""
+        return [s for s in self.sinks if s.file_path == file_path]
+, 'sql_injection', 'createQuery'),
+            (r'createNativeQuery\s*\([^)]*\
+    
+    def get_sinks_by_type(self, vuln_type: VulnerabilityType) -> List[SinkPoint]:
+        """按漏洞类型获取Sink点"""
+        return [s for s in self.sinks if s.vulnerability_type == vuln_type]
+    
+    def get_sinks_by_file(self, file_path: str) -> List[SinkPoint]:
+        """按文件获取Sink点"""
+        return [s for s in self.sinks if s.file_path == file_path]
+, 'sql_injection', 'createNativeQuery'),
+            (r'executeQuery\s*\([^)]*\
+    
+    def get_sinks_by_type(self, vuln_type: VulnerabilityType) -> List[SinkPoint]:
+        """按漏洞类型获取Sink点"""
+        return [s for s in self.sinks if s.vulnerability_type == vuln_type]
+    
+    def get_sinks_by_file(self, file_path: str) -> List[SinkPoint]:
+        """按文件获取Sink点"""
+        return [s for s in self.sinks if s.file_path == file_path]
+, 'sql_injection', 'executeQuery'),
         ]
         
         for pattern, vuln_type, func_name in patterns:
@@ -605,6 +915,263 @@ class SinkAnalyzer:
         # 反序列化
         patterns = [
             (r'unserialize\s*\([^)]*\$_', 'deserialization', 'unserialize'),
+            (r'unserialize\s*\([^)]*\$request', 'deserialization', 'unserialize'),
+        ]
+        
+        for pattern, vuln_type, func_name in patterns:
+            for match in re.finditer(pattern, content):
+                self._add_sink_from_match(match, file_path, lines, vuln_type, func_name)
+        
+        # XSS - Laravel/Symfony模板
+        patterns = [
+            (r'->with\s*\([^)]*\
+    
+    def get_sinks_by_type(self, vuln_type: VulnerabilityType) -> List[SinkPoint]:
+        """按漏洞类型获取Sink点"""
+        return [s for s in self.sinks if s.vulnerability_type == vuln_type]
+    
+    def get_sinks_by_file(self, file_path: str) -> List[SinkPoint]:
+        """按文件获取Sink点"""
+        return [s for s in self.sinks if s.file_path == file_path]
+, 'xss', 'with'),  # Laravel view data
+            (r'Response::make\s*\([^)]*\
+    
+    def get_sinks_by_type(self, vuln_type: VulnerabilityType) -> List[SinkPoint]:
+        """按漏洞类型获取Sink点"""
+        return [s for s in self.sinks if s.vulnerability_type == vuln_type]
+    
+    def get_sinks_by_file(self, file_path: str) -> List[SinkPoint]:
+        """按文件获取Sink点"""
+        return [s for s in self.sinks if s.file_path == file_path]
+, 'xss', 'Response::make'),
+            (r'new\s+Response\s*\([^)]*\
+    
+    def get_sinks_by_type(self, vuln_type: VulnerabilityType) -> List[SinkPoint]:
+        """按漏洞类型获取Sink点"""
+        return [s for s in self.sinks if s.vulnerability_type == vuln_type]
+    
+    def get_sinks_by_file(self, file_path: str) -> List[SinkPoint]:
+        """按文件获取Sink点"""
+        return [s for s in self.sinks if s.file_path == file_path]
+, 'xss', 'Response'),
+            (r'JsonResponse\s*\([^)]*\
+    
+    def get_sinks_by_type(self, vuln_type: VulnerabilityType) -> List[SinkPoint]:
+        """按漏洞类型获取Sink点"""
+        return [s for s in self.sinks if s.vulnerability_type == vuln_type]
+    
+    def get_sinks_by_file(self, file_path: str) -> List[SinkPoint]:
+        """按文件获取Sink点"""
+        return [s for s in self.sinks if s.file_path == file_path]
+, 'xss', 'JsonResponse'),
+        ]
+        
+        for pattern, vuln_type, func_name in patterns:
+            for match in re.finditer(pattern, content):
+                self._add_sink_from_match(match, file_path, lines, vuln_type, func_name)
+        
+        # 路径遍历
+        patterns = [
+            (r'file_get_contents\s*\([^)]*\
+    
+    def get_sinks_by_type(self, vuln_type: VulnerabilityType) -> List[SinkPoint]:
+        """按漏洞类型获取Sink点"""
+        return [s for s in self.sinks if s.vulnerability_type == vuln_type]
+    
+    def get_sinks_by_file(self, file_path: str) -> List[SinkPoint]:
+        """按文件获取Sink点"""
+        return [s for s in self.sinks if s.file_path == file_path]
+, 'path_traversal', 'file_get_contents'),
+            (r'file_put_contents\s*\([^)]*\
+    
+    def get_sinks_by_type(self, vuln_type: VulnerabilityType) -> List[SinkPoint]:
+        """按漏洞类型获取Sink点"""
+        return [s for s in self.sinks if s.vulnerability_type == vuln_type]
+    
+    def get_sinks_by_file(self, file_path: str) -> List[SinkPoint]:
+        """按文件获取Sink点"""
+        return [s for s in self.sinks if s.file_path == file_path]
+, 'path_traversal', 'file_put_contents'),
+            (r'fopen\s*\([^)]*\
+    
+    def get_sinks_by_type(self, vuln_type: VulnerabilityType) -> List[SinkPoint]:
+        """按漏洞类型获取Sink点"""
+        return [s for s in self.sinks if s.vulnerability_type == vuln_type]
+    
+    def get_sinks_by_file(self, file_path: str) -> List[SinkPoint]:
+        """按文件获取Sink点"""
+        return [s for s in self.sinks if s.file_path == file_path]
+, 'path_traversal', 'fopen'),
+            (r'readfile\s*\([^)]*\
+    
+    def get_sinks_by_type(self, vuln_type: VulnerabilityType) -> List[SinkPoint]:
+        """按漏洞类型获取Sink点"""
+        return [s for s in self.sinks if s.vulnerability_type == vuln_type]
+    
+    def get_sinks_by_file(self, file_path: str) -> List[SinkPoint]:
+        """按文件获取Sink点"""
+        return [s for s in self.sinks if s.file_path == file_path]
+, 'path_traversal', 'readfile'),
+            (r'include\s*\([^)]*\
+    
+    def get_sinks_by_type(self, vuln_type: VulnerabilityType) -> List[SinkPoint]:
+        """按漏洞类型获取Sink点"""
+        return [s for s in self.sinks if s.vulnerability_type == vuln_type]
+    
+    def get_sinks_by_file(self, file_path: str) -> List[SinkPoint]:
+        """按文件获取Sink点"""
+        return [s for s in self.sinks if s.file_path == file_path]
+, 'path_traversal', 'include'),
+            (r'require\s*\([^)]*\
+    
+    def get_sinks_by_type(self, vuln_type: VulnerabilityType) -> List[SinkPoint]:
+        """按漏洞类型获取Sink点"""
+        return [s for s in self.sinks if s.vulnerability_type == vuln_type]
+    
+    def get_sinks_by_file(self, file_path: str) -> List[SinkPoint]:
+        """按文件获取Sink点"""
+        return [s for s in self.sinks if s.file_path == file_path]
+, 'path_traversal', 'require'),
+            # Laravel Storage
+            (r'Storage::get\s*\([^)]*\
+    
+    def get_sinks_by_type(self, vuln_type: VulnerabilityType) -> List[SinkPoint]:
+        """按漏洞类型获取Sink点"""
+        return [s for s in self.sinks if s.vulnerability_type == vuln_type]
+    
+    def get_sinks_by_file(self, file_path: str) -> List[SinkPoint]:
+        """按文件获取Sink点"""
+        return [s for s in self.sinks if s.file_path == file_path]
+, 'path_traversal', 'Storage::get'),
+            (r'Storage::put\s*\([^)]*\
+    
+    def get_sinks_by_type(self, vuln_type: VulnerabilityType) -> List[SinkPoint]:
+        """按漏洞类型获取Sink点"""
+        return [s for s in self.sinks if s.vulnerability_type == vuln_type]
+    
+    def get_sinks_by_file(self, file_path: str) -> List[SinkPoint]:
+        """按文件获取Sink点"""
+        return [s for s in self.sinks if s.file_path == file_path]
+, 'path_traversal', 'Storage::put'),
+            (r'Storage::download\s*\([^)]*\
+    
+    def get_sinks_by_type(self, vuln_type: VulnerabilityType) -> List[SinkPoint]:
+        """按漏洞类型获取Sink点"""
+        return [s for s in self.sinks if s.vulnerability_type == vuln_type]
+    
+    def get_sinks_by_file(self, file_path: str) -> List[SinkPoint]:
+        """按文件获取Sink点"""
+        return [s for s in self.sinks if s.file_path == file_path]
+, 'path_traversal', 'Storage::download'),
+        ]
+        
+        for pattern, vuln_type, func_name in patterns:
+            for match in re.finditer(pattern, content):
+                self._add_sink_from_match(match, file_path, lines, vuln_type, func_name)
+        
+        # SSRF
+        patterns = [
+            (r'file_get_contents\s*\([^)]*http', 'ssrf', 'file_get_contents'),
+            (r'curl_exec\s*\([^)]*\
+    
+    def get_sinks_by_type(self, vuln_type: VulnerabilityType) -> List[SinkPoint]:
+        """按漏洞类型获取Sink点"""
+        return [s for s in self.sinks if s.vulnerability_type == vuln_type]
+    
+    def get_sinks_by_file(self, file_path: str) -> List[SinkPoint]:
+        """按文件获取Sink点"""
+        return [s for s in self.sinks if s.file_path == file_path]
+, 'ssrf', 'curl_exec'),
+            (r'fsockopen\s*\([^)]*\
+    
+    def get_sinks_by_type(self, vuln_type: VulnerabilityType) -> List[SinkPoint]:
+        """按漏洞类型获取Sink点"""
+        return [s for s in self.sinks if s.vulnerability_type == vuln_type]
+    
+    def get_sinks_by_file(self, file_path: str) -> List[SinkPoint]:
+        """按文件获取Sink点"""
+        return [s for s in self.sinks if s.file_path == file_path]
+, 'ssrf', 'fsockopen'),
+            # Laravel HTTP client
+            (r'Http::get\s*\([^)]*\
+    
+    def get_sinks_by_type(self, vuln_type: VulnerabilityType) -> List[SinkPoint]:
+        """按漏洞类型获取Sink点"""
+        return [s for s in self.sinks if s.vulnerability_type == vuln_type]
+    
+    def get_sinks_by_file(self, file_path: str) -> List[SinkPoint]:
+        """按文件获取Sink点"""
+        return [s for s in self.sinks if s.file_path == file_path]
+, 'ssrf', 'Http::get'),
+            (r'Http::post\s*\([^)]*\
+    
+    def get_sinks_by_type(self, vuln_type: VulnerabilityType) -> List[SinkPoint]:
+        """按漏洞类型获取Sink点"""
+        return [s for s in self.sinks if s.vulnerability_type == vuln_type]
+    
+    def get_sinks_by_file(self, file_path: str) -> List[SinkPoint]:
+        """按文件获取Sink点"""
+        return [s for s in self.sinks if s.file_path == file_path]
+, 'ssrf', 'Http::post'),
+        ]
+        
+        for pattern, vuln_type, func_name in patterns:
+            for match in re.finditer(pattern, content):
+                self._add_sink_from_match(match, file_path, lines, vuln_type, func_name)
+    
+    def _analyze_cs_file(self, file_path: str, content: str, lines: List[str]):
+        """分析C#文件 (ASP.NET)"""
+        # SQL注入
+        patterns = [
+            (r'ExecuteNonQuery\s*\([^)]*\+', 'sql_injection', 'ExecuteNonQuery'),
+            (r'ExecuteScalar\s*\([^)]*\+', 'sql_injection', 'ExecuteScalar'),
+            (r'ExecuteReader\s*\([^)]*\+', 'sql_injection', 'ExecuteReader'),
+            (r'FromSqlRaw\s*\([^)]*\+', 'sql_injection', 'FromSqlRaw'),  # EF Core
+            (r'ExecuteSqlRaw\s*\([^)]*\+', 'sql_injection', 'ExecuteSqlRaw'),
+        ]
+        
+        for pattern, vuln_type, func_name in patterns:
+            for match in re.finditer(pattern, content):
+                self._add_sink_from_match(match, file_path, lines, vuln_type, func_name)
+        
+        # 命令注入
+        patterns = [
+            (r'Process\.Start\s*\([^)]*\+', 'command_injection', 'Process.Start'),
+            (r'ProcessStartInfo\s*\([^)]*\+', 'command_injection', 'ProcessStartInfo'),
+        ]
+        
+        for pattern, vuln_type, func_name in patterns:
+            for match in re.finditer(pattern, content):
+                self._add_sink_from_match(match, file_path, lines, vuln_type, func_name)
+        
+        # 路径遍历
+        patterns = [
+            (r'File\.ReadAllText\s*\([^)]*\+', 'path_traversal', 'File.ReadAllText'),
+            (r'File\.WriteAllText\s*\([^)]*\+', 'path_traversal', 'File.WriteAllText'),
+            (r'File\.Open\s*\([^)]*\+', 'path_traversal', 'File.Open'),
+            (r'new\s+FileStream\s*\([^)]*\+', 'path_traversal', 'FileStream'),
+        ]
+        
+        for pattern, vuln_type, func_name in patterns:
+            for match in re.finditer(pattern, content):
+                self._add_sink_from_match(match, file_path, lines, vuln_type, func_name)
+        
+        # SSRF
+        patterns = [
+            (r'HttpClient\.GetAsync\s*\([^)]*\+', 'ssrf', 'HttpClient.GetAsync'),
+            (r'HttpClient\.PostAsync\s*\([^)]*\+', 'ssrf', 'HttpClient.PostAsync'),
+            (r'WebClient\.DownloadString\s*\([^)]*\+', 'ssrf', 'WebClient.DownloadString'),
+        ]
+        
+        for pattern, vuln_type, func_name in patterns:
+            for match in re.finditer(pattern, content):
+                self._add_sink_from_match(match, file_path, lines, vuln_type, func_name)
+        
+        # 反序列化
+        patterns = [
+            (r'JsonConvert\.DeserializeObject\s*\([^)]*\+', 'deserialization', 'JsonConvert.DeserializeObject'),
+            (r'BinaryFormatter\.Deserialize\s*\(', 'deserialization', 'BinaryFormatter.Deserialize'),
+            (r'XmlSerializer\.Deserialize\s*\(', 'deserialization', 'XmlSerializer.Deserialize'),
         ]
         
         for pattern, vuln_type, func_name in patterns:

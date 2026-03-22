@@ -19,6 +19,7 @@ Automatically identify HTTP entry points, supporting the following frameworks:
 - **Java**: Spring, Struts
 - **Go**: Gin, Echo
 - **PHP**: Laravel, Symfony
+- **C#/.NET**: ASP.NET Core
 
 ### 2. Sink Point Detection
 
@@ -448,6 +449,72 @@ SourcePattern(
 ---
 
 ## Changelog
+
+### v1.2.0 (2026-03-22)
+
+#### New Features
+- ✨ **Added Laravel Framework Support**
+  - Route detection: `Route::get()`, `Route::post()`, etc.
+  - Automatic controller method identification
+  - Parameter extraction: `$request->input()`, `$request->get()`, `$request->query()`, etc.
+  - Laravel-specific Sink detection: `DB::raw()`, `whereRaw()`, `Process::run()`, `Storage::get()`, etc.
+
+- ✨ **Added Symfony Framework Support**
+  - PHP 8 attribute syntax: `#[Route()]`
+  - Doctrine annotation syntax: `@Route()`
+  - Automatic controller method identification
+  - Parameter extraction: `$request->query->get()`, `$request->request->get()`, etc.
+  - Symfony-specific Sink detection: `createQuery()`, `createNativeQuery()`, `executeQuery()`, etc.
+
+- ✨ **Added ASP.NET Framework Support**
+  - Route attribute detection: `[HttpGet]`, `[Route()]`, `[ApiController]`
+  - Automatic controller method identification
+  - Parameter extraction: `[FromQuery]`, `[FromRoute]`, `[FromBody]`, etc.
+  - ASP.NET-specific Sink detection: `FromSqlRaw()`, `Process.Start()`, `File.ReadAllText()`, etc.
+  - New file extension support: `.cs`, `.cshtml`
+
+#### Optimizations
+- 🔧 **Improved Call Chain Tracking Algorithm**
+  - Added `VariableInfo` dataclass for variable name, source, taint status, taint sources, line number, value type
+  - Added `DataFlowNode` dataclass for data flow node information
+  - Implemented variable tracking system: `variable_states`, `data_flows`, `tainted_variables`
+  - Added `_analyze_function_variables()` method: analyze variable tracking and data flow within functions
+  - Added `_analyze_assignment()` method: analyze right-hand side of assignment expressions, track taint propagation
+  - Added `_analyze_call_arguments()` method: analyze parameter passing in function calls
+  - Added user input detection: `_is_user_input_node()`, `_is_user_input_pattern()`
+  - Added sanitization function detection: `_is_sanitization_function()`
+
+- 🔧 **Enhanced Sanitization Detection**
+  - Added sanitization function mapping table, categorized by vulnerability type and language
+    - SQL Injection: `escape_string`, `mysqli_real_escape_string`, `quote`, etc.
+    - XSS: `html.escape`, `htmlspecialchars`, `DOMPurify.sanitize`, etc.
+    - Command Injection: `shlex.quote`, `escapeshellarg`, etc.
+    - Path Traversal: `os.path.basename`, `secure_filename`, etc.
+    - SSRF: `urllib.parse.quote`, `filter_var`, etc.
+  - Added `_is_sanitized()` method: check if variable has been sanitized
+  - Added `_check_sanitization_in_context()` method: check if variable is sanitized in context
+  - Added `_analyze_sanitization_chain()` method: analyze sanitization chain, check sanitization operations in data flow
+  - Sanitized vulnerabilities automatically have severity reduced to LOW
+
+#### Technical Improvements
+- ⚡ Optimized `call_chain_analyzer.py`, enhanced variable tracking and data flow analysis capabilities
+- ⚡ Optimized `source_analyzer.py`, added Laravel, Symfony, ASP.NET framework support
+- ⚡ Optimized `sink_analyzer.py`, enhanced sanitization detection and added C# file analysis
+- ⚡ Optimized `config.py`, added LARAVEL, SYMFONY, ASPNET framework enums
+- ⚡ Added `.cs`, `.cshtml` file extension support
+
+#### Framework Support Completeness
+- ✅ Flask (Python) - Full support
+- ✅ Django (Python) - Full support
+- ✅ FastAPI (Python) - Full support
+- ✅ Express (JavaScript) - Full support
+- ✅ Spring (Java) - Full support
+- ✅ Gin (Go) - Full support
+- ✅ Laravel (PHP) - **New support**
+- ✅ Symfony (PHP) - **New support**
+- ✅ ASP.NET (C#) - **New support**
+
+---
 
 ### v1.1.2 (2026-03-20)
 

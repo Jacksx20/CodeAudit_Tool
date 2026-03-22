@@ -19,6 +19,7 @@
 - **Java**: Spring, Struts
 - **Go**: Gin, Echo
 - **PHP**: Laravel, Symfony
+- **C#/.NET**: ASP.NET Core
 
 ### 2. Sink点检测
 
@@ -520,6 +521,72 @@ MIT License
 ---
 
 ## 更新日志
+
+### v1.2.0 (2026-03-22)
+
+#### 新增功能
+- ✨ **新增Laravel框架支持**
+  - 支持路由检测：`Route::get()`, `Route::post()` 等
+  - 支持控制器方法自动识别
+  - 支持参数提取：`$request->input()`, `$request->get()`, `$request->query()` 等
+  - 支持Laravel特有Sink检测：`DB::raw()`, `whereRaw()`, `Process::run()`, `Storage::get()` 等
+
+- ✨ **新增Symfony框架支持**
+  - 支持PHP 8属性语法：`#[Route()]`
+  - 支持Doctrine注解语法：`@Route()`
+  - 支持控制器方法自动识别
+  - 支持参数提取：`$request->query->get()`, `$request->request->get()` 等
+  - 支持Symfony特有Sink检测：`createQuery()`, `createNativeQuery()`, `executeQuery()` 等
+
+- ✨ **新增ASP.NET框架支持**
+  - 支持路由特性检测：`[HttpGet]`, `[Route()]`, `[ApiController]`
+  - 支持控制器方法自动识别
+  - 支持参数提取：`[FromQuery]`, `[FromRoute]`, `[FromBody]` 等
+  - 支持ASP.NET特有Sink检测：`FromSqlRaw()`, `Process.Start()`, `File.ReadAllText()` 等
+  - 新增文件扩展名支持：`.cs`, `.cshtml`
+
+#### 优化改进
+- 🔧 **完善调用链追踪算法**
+  - 新增 `VariableInfo` 数据类，记录变量名、来源、污点状态、污点来源、定义行号、值类型
+  - 新增 `DataFlowNode` 数据类，记录数据流节点信息
+  - 实现变量追踪系统：`variable_states`, `data_flows`, `tainted_variables`
+  - 新增 `_analyze_function_variables()` 方法：分析函数内的变量追踪和数据流
+  - 新增 `_analyze_assignment()` 方法：分析赋值语句右侧表达式，追踪污点传播
+  - 新增 `_analyze_call_arguments()` 方法：分析函数调用中的参数传递
+  - 新增用户输入检测：`_is_user_input_node()`, `_is_user_input_pattern()`
+  - 新增净化函数检测：`_is_sanitization_function()`
+
+- 🔧 **增强净化检测功能**
+  - 新增净化函数映射表，按漏洞类型和语言分类
+    - SQL注入：`escape_string`, `mysqli_real_escape_string`, `quote` 等
+    - XSS：`html.escape`, `htmlspecialchars`, `DOMPurify.sanitize` 等
+    - 命令注入：`shlex.quote`, `escapeshellarg` 等
+    - 路径遍历：`os.path.basename`, `secure_filename` 等
+    - SSRF：`urllib.parse.quote`, `filter_var` 等
+  - 新增 `_is_sanitized()` 方法：检查变量是否已被净化
+  - 新增 `_check_sanitization_in_context()` 方法：检查变量在上下文中是否被净化
+  - 新增 `_analyze_sanitization_chain()` 方法：分析净化链，检查数据流中的净化操作
+  - 已净化的漏洞自动降低严重程度为 LOW
+
+#### 技术改进
+- ⚡ 优化 `call_chain_analyzer.py`，增强变量追踪和数据流分析能力
+- ⚡ 优化 `source_analyzer.py`，新增Laravel、Symfony、ASP.NET框架支持
+- ⡡ 优化 `sink_analyzer.py`，增强净化检测和新增C#文件分析
+- ⡡ 优化 `config.py`，新增LARAVEL、SYMFONY、ASPNET框架枚举
+- ⡡ 新增 `.cs`, `.cshtml` 文件扩展名支持
+
+#### 框架支持完整性
+- ✅ Flask (Python) - 完整支持
+- ✅ Django (Python) - 完整支持
+- ✅ FastAPI (Python) - 完整支持
+- ✅ Express (JavaScript) - 完整支持
+- ✅ Spring (Java) - 完整支持
+- ✅ Gin (Go) - 完整支持
+- ✅ Laravel (PHP) - **新增支持**
+- ✅ Symfony (PHP) - **新增支持**
+- ✅ ASP.NET (C#) - **新增支持**
+
+---
 
 ### v1.1.2 (2026-03-20)
 

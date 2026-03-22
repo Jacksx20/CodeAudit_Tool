@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 """
 Source点分析器 - 识别HTTP入口点
-支持Flask、Django、FastAPI、Express、Spring、Gin等框架
+支持Flask、Django、FastAPI、Express、Spring、Gin、Laravel、Symfony、ASP.NET等框架
 """
 import os
 import re
@@ -30,7 +30,29 @@ class SourceAnalyzer:
             Framework.FASTAPI: ['from fastapi', 'import fastapi', '@app.get', '@app.post', 'FastAPI()'],
             Framework.EXPRESS: ['express()', 'require("express")', "require('express')", 'router.'],
             Framework.SPRING: ['@RequestMapping', '@GetMapping', '@PostMapping', '@RestController'],
-            Framework.GIN: ['gin.Default()', 'gin.New()', 'r.GET', 'r.POST', 'router.']
+            Framework.GIN: ['gin.Default()', 'gin.New()', 'r.GET', 'r.POST', 'router.'],
+            # Laravel框架检测
+            Framework.LARAVEL: [
+                'Illuminate\\Http', 'Illuminate\\Routing', 
+                'Route::', 'Route::get', 'Route::post', 'Route::put', 'Route::delete',
+                '$app->get', '$app->post', '$router->',
+                'namespace App\\Http\\Controllers',
+            ],
+            # Symfony框架检测
+            Framework.SYMFONY: [
+                'Symfony\\Component', 'Symfony\\Bundle',
+                '@Route', '@Method', '@Template',
+                'Symfony\\Component\\Routing',
+                'Symfony\\Component\\HttpFoundation',
+                'extends AbstractController', 'extends Controller',
+            ],
+            # ASP.NET框架检测
+            Framework.ASPNET: [
+                '[HttpGet]', '[HttpPost]', '[HttpPut]', '[HttpDelete]',
+                '[Route]', '[ApiController]', 'ControllerBase',
+                'Microsoft.AspNetCore.Mvc',
+                'IActionResult', 'ActionResult',
+            ],
         }
         
         # 参数提取模式
@@ -68,7 +90,35 @@ class SourceAnalyzer:
                 r'c\.Query\s*\(\s*["\'](\w+)["\']',
                 r'c\.PostForm\s*\(\s*["\'](\w+)["\']',
                 r'c\.Param\s*\(\s*["\'](\w+)["\']',
-            ]
+            ],
+            # Laravel参数提取
+            Framework.LARAVEL: [
+                r'\$request->input\s*\(\s*["\'](\w+)["\']',
+                r'\$request->get\s*\(\s*["\'](\w+)["\']',
+                r'\$request->query\s*\(\s*["\'](\w+)["\']',
+                r'\$request->post\s*\(\s*["\'](\w+)["\']',
+                r'\$request->(\w+)',
+                r'\$request->all\s*\(\)',
+                r'\$request->json\s*\(\s*["\'](\w+)["\']',
+            ],
+            # Symfony参数提取
+            Framework.SYMFONY: [
+                r'\$request->query->get\s*\(\s*["\'](\w+)["\']',
+                r'\$request->request->get\s*\(\s*["\'](\w+)["\']',
+                r'\$request->get\s*\(\s*["\'](\w+)["\']',
+                r'\$request->request->all\s*\(\)',
+                r'\$request->query->all\s*\(\)',
+                r'\$request->getContent\s*\(\)',
+            ],
+            # ASP.NET参数提取
+            Framework.ASPNET: [
+                r'\[FromQuery\]\s*(?:\w+\s+)?(\w+)',
+                r'\[FromRoute\]\s*(?:\w+\s+)?(\w+)',
+                r'\[FromBody\]',
+                r'Request\.Query\s*\[\s*["\'](\w+)["\']',
+                r'Request\.Form\s*\[\s*["\'](\w+)["\']',
+                r'Request\.Body',
+            ],
         }
     
     def analyze(self, target_path: str) -> List[SourcePoint]:
@@ -122,6 +172,12 @@ class SourceAnalyzer:
             self._analyze_java_file(file_path, content, lines, framework)
         elif framework == Framework.GIN:
             self._analyze_go_file(file_path, content, lines, framework)
+        elif framework == Framework.LARAVEL:
+            self._analyze_laravel_file(file_path, content, lines, framework)
+        elif framework == Framework.SYMFONY:
+            self._analyze_symfony_file(file_path, content, lines, framework)
+        elif framework == Framework.ASPNET:
+            self._analyze_aspnet_file(file_path, content, lines, framework)
     
     def _detect_framework(self, content: str) -> Framework:
         """检测代码使用的框架"""
@@ -468,6 +524,384 @@ class SourceAnalyzer:
                 )
                 
                 self.sources.append(source)
+    
+    def _analyze_laravel_file(self, file_path: str, content: str, 
+                             lines: List[str], framework: Framework):
+        """分析Laravel PHP文件"""
+        # Laravel路由模式: Route::get('/path', 'Controller@method') 或 Route::get('/path', [Controller::class, 'method'])
+        route_patterns = [
+            # Route::get('/path', 'Controller@method')
+            r'Route::(get|post|put|delete|patch)\s*\(\s*["\']([^"\']+)["\']\s*,\s*["\']([^"\']+)@(\w+)["\']',
+            # Route::get('/path', [Controller::class, 'method'])
+            r'Route::(get|post|put|delete|patch)\s*\(\s*["\']([^"\']+)["\']\s*,\s*\[?\s*(\w+)::class\s*,\s*["\'](\w+)["\']',
+            # Route::get('/path', function() {...})
+            r'Route::(get|post|put|delete|patch)\s*\(\s*["\']([^"\']+)["\']\s*,\s*function',
+            # 闭包路由
+            r'\$app->(get|post|put|delete|patch)\s*\(\s*["\']([^"\']+)["\']',
+        ]
+        
+        for pattern in route_patterns:
+            for match in re.finditer(pattern, content, re.IGNORECASE):
+                line_num = content[:match.start()].count('\n') + 1
+                groups = match.groups()
+                
+                method = groups[0].upper() if groups[0] else 'GET'
+                route = groups[1] if len(groups) > 1 else '/'
+                
+                # 确定函数名
+                if len(groups) >= 4 and groups[3]:
+                    func_name = groups[3]  # 方法名
+                    class_name = groups[2] if len(groups) > 2 else None
+                elif 'function' in match.group(0):
+                    func_name = f'closure_{line_num}'
+                    class_name = None
+                else:
+                    func_name = 'anonymous'
+                    class_name = None
+                
+                # 提取参数
+                parameters = self._extract_laravel_parameters(content, match.start())
+                
+                # 获取代码片段
+                start_line = max(0, line_num - 1)
+                end_line = min(len(lines), line_num + 10)
+                code_snippet = '\n'.join(lines[start_line:end_line])
+                
+                source = SourcePoint(
+                    file_path=file_path,
+                    line_number=line_num,
+                    function_name=func_name,
+                    framework=framework,
+                    route=route,
+                    http_method=method,
+                    parameters=parameters,
+                    code_snippet=code_snippet,
+                    class_name=class_name
+                )
+                
+                self.sources.append(source)
+        
+        # 分析控制器方法
+        self._analyze_laravel_controller(file_path, content, lines, framework)
+    
+    def _analyze_laravel_controller(self, file_path: str, content: str, 
+                                   lines: List[str], framework: Framework):
+        """分析Laravel控制器"""
+        # 检查是否是控制器文件
+        if 'Controller' not in content and 'namespace App\\Http\\Controllers' not in content:
+            return
+        
+        # 查找公共方法
+        method_pattern = r'public\s+function\s+(\w+)\s*\([^)]*\)'
+        
+        for match in re.finditer(method_pattern, content):
+            func_name = match.group(1)
+            
+            # 跳过魔术方法和常见非路由方法
+            if func_name.startswith('__') or func_name in ['middleware', 'authorize', 'validate']:
+                continue
+            
+            line_num = content[:match.start()].count('\n') + 1
+            
+            # 提取参数
+            parameters = self._extract_laravel_parameters(content[match.start():match.start()+500], 0)
+            
+            # 获取代码片段
+            start_line = max(0, line_num - 1)
+            end_line = min(len(lines), line_num + 15)
+            code_snippet = '\n'.join(lines[start_line:end_line])
+            
+            # 提取类名
+            class_match = re.search(r'class\s+(\w+)', content[:match.start()])
+            class_name = class_match.group(1) if class_match else None
+            
+            source = SourcePoint(
+                file_path=file_path,
+                line_number=line_num,
+                function_name=func_name,
+                framework=framework,
+                route=f'/{func_name}',  # 推测路由
+                http_method='GET,POST',  # 可能支持多种方法
+                parameters=parameters,
+                code_snippet=code_snippet,
+                class_name=class_name
+            )
+            
+            self.sources.append(source)
+    
+    def _extract_laravel_parameters(self, content: str, start_pos: int) -> List[str]:
+        """从Laravel代码中提取参数"""
+        parameters = []
+        handler_content = content[start_pos:start_pos + 2000]
+        
+        patterns = [
+            r'\$request->input\s*\(\s*["\'](\w+)["\']',
+            r'\$request->get\s*\(\s*["\'](\w+)["\']',
+            r'\$request->query\s*\(\s*["\'](\w+)["\']',
+            r'\$request->post\s*\(\s*["\'](\w+)["\']',
+            r'\$request->json\s*\(\s*["\'](\w+)["\']',
+            r'\$(\w+)\s*=\s*\$request->input',  # $var = $request->input(...)
+        ]
+        
+        for pattern in patterns:
+            for match in re.finditer(pattern, handler_content):
+                param = match.group(1)
+                if param not in parameters and param != 'request':
+                    parameters.append(param)
+        
+        return parameters
+    
+    def _analyze_symfony_file(self, file_path: str, content: str, 
+                             lines: List[str], framework: Framework):
+        """分析Symfony PHP文件"""
+        # Symfony路由注解模式: #[Route('/path', name: 'route_name', methods: ['GET'])]
+        annotation_patterns = [
+            # PHP 8 属性语法
+            r'#\[Route\s*\(\s*["\']([^"\']+)["\'](?:[^]]*methods:\s*\[?\s*["\']?(\w+)["\']?\s*\]?)?[^]]*\)\]',
+            # Doctrine注解语法
+            r'@Route\s*\(\s*["\']([^"\']+)["\'](?:[^)]*methods\s*=\s*\{?\s*["\']?(\w+)["\']?\s*\}?)?[^)]*\)',
+        ]
+        
+        for pattern in annotation_patterns:
+            for match in re.finditer(pattern, content):
+                route = match.group(1)
+                method = match.group(2).upper() if len(match.groups()) > 1 and match.group(2) else 'GET'
+                line_num = content[:match.start()].count('\n') + 1
+                
+                # 查找方法名
+                method_match = re.search(r'(?:public\s+)?function\s+(\w+)\s*\(', content[match.start():match.start()+300])
+                func_name = method_match.group(1) if method_match else 'unknown'
+                
+                # 提取参数
+                parameters = self._extract_symfony_parameters(content[match.start():match.start()+500])
+                
+                # 获取代码片段
+                start_line = max(0, line_num - 1)
+                end_line = min(len(lines), line_num + 15)
+                code_snippet = '\n'.join(lines[start_line:end_line])
+                
+                # 提取类名
+                class_match = re.search(r'class\s+(\w+)', content[:match.start()])
+                class_name = class_match.group(1) if class_match else None
+                
+                source = SourcePoint(
+                    file_path=file_path,
+                    line_number=line_num,
+                    function_name=func_name,
+                    framework=framework,
+                    route=route,
+                    http_method=method,
+                    parameters=parameters,
+                    code_snippet=code_snippet,
+                    class_name=class_name
+                )
+                
+                self.sources.append(source)
+        
+        # 分析控制器方法
+        self._analyze_symfony_controller(file_path, content, lines, framework)
+    
+    def _analyze_symfony_controller(self, file_path: str, content: str, 
+                                   lines: List[str], framework: Framework):
+        """分析Symfony控制器"""
+        # 检查是否是控制器文件
+        if 'AbstractController' not in content and 'Controller' not in content:
+            return
+        
+        # 查找公共方法
+        method_pattern = r'public\s+function\s+(\w+)\s*\([^)]*(?:Request|\$request)[^)]*\)'
+        
+        for match in re.finditer(method_pattern, content):
+            func_name = match.group(1)
+            
+            # 跳过魔术方法
+            if func_name.startswith('__'):
+                continue
+            
+            line_num = content[:match.start()].count('\n') + 1
+            
+            # 提取参数
+            parameters = self._extract_symfony_parameters(content[match.start():match.start()+500])
+            
+            # 获取代码片段
+            start_line = max(0, line_num - 1)
+            end_line = min(len(lines), line_num + 15)
+            code_snippet = '\n'.join(lines[start_line:end_line])
+            
+            # 提取类名
+            class_match = re.search(r'class\s+(\w+)', content[:match.start()])
+            class_name = class_match.group(1) if class_match else None
+            
+            source = SourcePoint(
+                file_path=file_path,
+                line_number=line_num,
+                function_name=func_name,
+                framework=framework,
+                route=f'/{func_name}',
+                http_method='GET,POST',
+                parameters=parameters,
+                code_snippet=code_snippet,
+                class_name=class_name
+            )
+            
+            self.sources.append(source)
+    
+    def _extract_symfony_parameters(self, content: str) -> List[str]:
+        """从Symfony代码中提取参数"""
+        parameters = []
+        
+        patterns = [
+            r'\$request->query->get\s*\(\s*["\'](\w+)["\']',
+            r'\$request->request->get\s*\(\s*["\'](\w+)["\']',
+            r'\$request->get\s*\(\s*["\'](\w+)["\']',
+            r'\$request->attributes->get\s*\(\s*["\'](\w+)["\']',
+        ]
+        
+        for pattern in patterns:
+            for match in re.finditer(pattern, content):
+                param = match.group(1)
+                if param not in parameters:
+                    parameters.append(param)
+        
+        return parameters
+    
+    def _analyze_aspnet_file(self, file_path: str, content: str, 
+                            lines: List[str], framework: Framework):
+        """分析ASP.NET C#文件"""
+        # ASP.NET路由模式
+        route_patterns = [
+            # [HttpGet] [Route("/path")]
+            r'\[(Http(?:Get|Post|Put|Delete|Patch))\][^\[]*\[Route\s*\(\s*["\']([^"\']+)["\']',
+            # [Route("/path")] [HttpGet]
+            r'\[Route\s*\(\s*["\']([^"\']+)["\']\][^\[]*\[(Http(?:Get|Post|Put|Delete|Patch))\]',
+            # [HttpGet("/path")]
+            r'\[(Http(?:Get|Post|Put|Delete|Patch))\s*\(\s*["\']([^"\']+)["\']',
+            # [Route("/path", Name = "name")]
+            r'\[Route\s*\(\s*["\']([^"\']+)["\']',
+        ]
+        
+        for pattern in route_patterns:
+            for match in re.finditer(pattern, content):
+                groups = match.groups()
+                
+                # 确定HTTP方法和路由
+                if groups[0] and groups[0].startswith('Http'):
+                    method = groups[0].replace('Http', '').upper()
+                    route = groups[1] if len(groups) > 1 else '/'
+                elif len(groups) > 1 and groups[1] and groups[1].startswith('Http'):
+                    route = groups[0]
+                    method = groups[1].replace('Http', '').upper()
+                else:
+                    route = groups[0] if groups[0] else '/'
+                    method = 'GET'
+                
+                line_num = content[:match.start()].count('\n') + 1
+                
+                # 查找方法名
+                method_match = re.search(r'(?:public|private|protected)\s+(?:async\s+)?(?:IActionResult|ActionResult|Task<.*?>|\w+)\s+(\w+)\s*\(', 
+                                        content[match.start():match.start()+300])
+                func_name = method_match.group(1) if method_match else 'unknown'
+                
+                # 提取参数
+                parameters = self._extract_aspnet_parameters(content[match.start():match.start()+500])
+                
+                # 获取代码片段
+                start_line = max(0, line_num - 1)
+                end_line = min(len(lines), line_num + 15)
+                code_snippet = '\n'.join(lines[start_line:end_line])
+                
+                # 提取类名
+                class_match = re.search(r'class\s+(\w+)(?:\s*:\s*ControllerBase)?', content[:match.start()])
+                class_name = class_match.group(1) if class_match else None
+                
+                source = SourcePoint(
+                    file_path=file_path,
+                    line_number=line_num,
+                    function_name=func_name,
+                    framework=framework,
+                    route=route,
+                    http_method=method,
+                    parameters=parameters,
+                    code_snippet=code_snippet,
+                    class_name=class_name
+                )
+                
+                self.sources.append(source)
+        
+        # 分析控制器方法
+        self._analyze_aspnet_controller(file_path, content, lines, framework)
+    
+    def _analyze_aspnet_controller(self, file_path: str, content: str, 
+                                  lines: List[str], framework: Framework):
+        """分析ASP.NET控制器"""
+        # 检查是否是控制器文件
+        if 'ControllerBase' not in content and 'Controller' not in content:
+            return
+        
+        # 查找公共方法
+        method_pattern = r'public\s+(?:async\s+)?(?:IActionResult|ActionResult|Task<.*?>|\w+)\s+(\w+)\s*\([^)]*\)'
+        
+        for match in re.finditer(method_pattern, content):
+            func_name = match.group(1)
+            
+            # 跳过Dispose等非路由方法
+            if func_name in ['Dispose', 'ToString', 'Equals', 'GetHashCode']:
+                continue
+            
+            line_num = content[:match.start()].count('\n') + 1
+            
+            # 检查是否有HTTP方法特性
+            http_method = 'GET'
+            for m in ['Get', 'Post', 'Put', 'Delete', 'Patch']:
+                if f'[Http{m}]' in content[max(0, match.start()-200):match.start()]:
+                    http_method = m.upper()
+                    break
+            
+            # 提取参数
+            parameters = self._extract_aspnet_parameters(content[match.start():match.start()+500])
+            
+            # 获取代码片段
+            start_line = max(0, line_num - 1)
+            end_line = min(len(lines), line_num + 15)
+            code_snippet = '\n'.join(lines[start_line:end_line])
+            
+            # 提取类名
+            class_match = re.search(r'class\s+(\w+)', content[:match.start()])
+            class_name = class_match.group(1) if class_match else None
+            
+            source = SourcePoint(
+                file_path=file_path,
+                line_number=line_num,
+                function_name=func_name,
+                framework=framework,
+                route=f'/{func_name}',
+                http_method=http_method,
+                parameters=parameters,
+                code_snippet=code_snippet,
+                class_name=class_name
+            )
+            
+            self.sources.append(source)
+    
+    def _extract_aspnet_parameters(self, content: str) -> List[str]:
+        """从ASP.NET代码中提取参数"""
+        parameters = []
+        
+        patterns = [
+            r'\[FromQuery\]\s*(?:\w+\s+)?(\w+)',
+            r'\[FromRoute\]\s*(?:\w+\s+)?(\w+)',
+            r'\[FromForm\]\s*(?:\w+\s+)?(\w+)',
+            r'Request\.Query\s*\[\s*["\'](\w+)["\']',
+            r'Request\.Form\s*\[\s*["\'](\w+)["\']',
+        ]
+        
+        for pattern in patterns:
+            for match in re.finditer(pattern, content):
+                param = match.group(1)
+                if param not in parameters:
+                    parameters.append(param)
+        
+        return parameters
     
     def get_detected_frameworks(self) -> Set[Framework]:
         """获取检测到的框架"""

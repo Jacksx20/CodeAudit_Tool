@@ -40,6 +40,9 @@ class Framework(Enum):
     EXPRESS = "express"
     SPRING = "spring"
     GIN = "gin"
+    LARAVEL = "laravel"
+    SYMFONY = "symfony"
+    ASPNET = "aspnet"
     GENERIC = "generic"
 
 
@@ -280,7 +283,7 @@ class Config:
         self.max_call_depth = 20              # 最大调用深度
         self.max_file_size = 10 * 1024 * 1024 # 最大文件大小 (10MB)
         self.supported_extensions = [
-            '.py', '.js', '.ts', '.java', '.go', '.php', '.rb', '.jsp', '.asp', '.aspx'
+            '.py', '.js', '.ts', '.java', '.go', '.php', '.rb', '.jsp', '.asp', '.aspx', '.cs', '.cshtml'
         ]
         self.exclude_dirs = [
             'node_modules', 'venv', '.git', '__pycache__', 'vendor', 'dist', 'build'

@@ -81,21 +81,24 @@ CodeAudit_Tool/
 ├── core/                           # 核心模块
 │   ├── __init__.py
 │   ├── config.py                   # 配置管理、数据结构定义、规则加载
+│   │   └── 框架枚举: Flask, Django, FastAPI, Express, Spring, Gin, Laravel, Symfony, ASPNET
 │   └── audit_engine.py             # 审计引擎、双向审计、攻击链分析
 │
 ├── analyzers/                      # 分析器模块
 │   ├── __init__.py
 │   ├── source_analyzer.py          # Source点分析器（HTTP入口点识别）
-│   │   └── 支持框架: Flask, Django, FastAPI, Express, Spring, Gin
+│   │   └── 支持框架: Flask, Django, FastAPI, Express, Spring, Gin, Laravel, Symfony, ASP.NET
 │   ├── sink_analyzer.py            # Sink点分析器（危险函数检测）
-│   │   └── 支持漏洞类型: SQL注入, XSS, 命令注入等10种
+│   │   ├── 支持漏洞类型: SQL注入, XSS, 命令注入等10种
+│   │   └── 支持语言: Python, JavaScript, Java, Go, PHP, C#
 │   └── call_chain_analyzer.py      # 调用链分析器（污点传播追踪）
-│       └── 功能: 构建调用图、路径查找、链路分析
+│       ├── 功能: 构建调用图、路径查找、链路分析
+│       └── 增强: 变量追踪、数据流分析、污点传播
 │
 ├── generators/                     # 生成器模块
 │   ├── __init__.py
 │   └── poc_generator.py            # PoC生成器（漏洞验证代码）
-│       └── 支持语言: Python, JavaScript, Java, Go, PHP
+│       └── 支持语言: Python, JavaScript, Java, Go, PHP, C#
 │
 ├── reports/                        # 报告模块
 │   ├── __init__.py
@@ -110,7 +113,7 @@ CodeAudit_Tool/
 │   ├── sources/                    # Source规则（HTTP入口点）
 │   │   ├── __init__.py
 │   │   └── source_patterns.py      # 框架路由模式定义
-│   │       └── 包含6种框架的路由模式
+│   │       └── 包含9种框架的路由模式
 │   └── vulnerabilities/            # 漏洞详细规则
 │       ├── __init__.py
 │       ├── sql_injection.json      # SQL注入规则
@@ -144,6 +147,8 @@ CodeAudit_Tool/
 **负责整体协调和配置管理：**
 
 * **config.py**: 定义所有数据结构（SourcePoint, SinkPoint, CallChain, Vulnerability, PoC, AuditResult），加载和管理规则库
+  * 框架枚举支持：Flask, Django, FastAPI, Express, Spring, Gin, Laravel, Symfony, ASPNET
+  * 文件扩展名支持：.py, .js, .ts, .java, .go, .php, .rb, .jsp, .asp, .aspx, .cs, .cshtml
 * **audit\_engine.py**: 主审计引擎，协调各分析器，执行正向/反向审计，分析攻击链
 
 #### 2. 分析层 (Analyzer Layer)
@@ -151,14 +156,27 @@ CodeAudit_Tool/
 **负责代码静态分析和漏洞检测：**
 
 * **source\_analyzer.py**: 使用AST解析和正则匹配，识别HTTP入口点（路由、控制器）
+  * Python框架：Flask, Django, FastAPI
+  * JavaScript框架：Express
+  * Java框架：Spring
+  * Go框架：Gin
+  * PHP框架：Laravel, Symfony
+  * C#框架：ASP.NET Core
 * **sink\_analyzer.py**: 识别危险函数调用，标记潜在的Sink点
+  * 支持语言：Python, JavaScript, Java, Go, PHP, C#
+  * 支持漏洞类型：SQL注入、命令注入、路径遍历、SSRF、XSS、反序列化、代码注入、XXE、LDAP注入、开放重定向
+  * 净化检测：自动识别净化函数调用，降低已净化漏洞的严重程度
 * **call\_chain\_analyzer.py**: 构建调用图，分析污点传播路径，构建Source→Sink调用链
+  * 变量追踪：追踪变量定义、赋值、引用
+  * 数据流分析：分析数据在函数间的传递
+  * 污点传播：追踪用户输入到危险函数的传播路径
 
 #### 3. 生成层 (Generator Layer)
 
 **负责生成漏洞验证代码：**
 
 * **poc\_generator.py**: 根据漏洞类型和调用链，自动生成可执行的PoC验证代码
+  * 支持语言：Python, JavaScript, Java, Go, PHP, C#
 
 #### 4. 报告层 (Report Layer)
 
@@ -171,7 +189,7 @@ CodeAudit_Tool/
 **存储所有检测规则：**
 
 * **sinks/**: 危险函数规则（Sink点）
-* **sources/**: HTTP入口点规则（Source点）
+* **sources/**: HTTP入口点规则（Source点），支持9种框架
 * **vulnerabilities/**: 漏洞详细规则（描述、CWE、修复建议等）
 
 #### 6. 模板层 (Templates)

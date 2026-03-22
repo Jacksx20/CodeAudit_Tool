@@ -81,21 +81,24 @@ code_audit_tool/
 ├── core/                           # Core modules
 │   ├── __init__.py
 │   ├── config.py                   # Configuration management, data structures, rule loading
+│   │   └── Framework enums: Flask, Django, FastAPI, Express, Spring, Gin, Laravel, Symfony, ASPNET
 │   └── audit_engine.py             # Audit engine, bidirectional audit, attack chain analysis
 │
 ├── analyzers/                      # Analyzer modules
 │   ├── __init__.py
 │   ├── source_analyzer.py          # Source point analyzer (HTTP entry point identification)
-│   │   └── Supported frameworks: Flask, Django, FastAPI, Express, Spring, Gin
+│   │   └── Supported frameworks: Flask, Django, FastAPI, Express, Spring, Gin, Laravel, Symfony, ASP.NET
 │   ├── sink_analyzer.py            # Sink point analyzer (dangerous function detection)
-│   │   └── Supported vulnerability types: SQL injection, XSS, command injection, etc. (10 types)
+│   │   ├── Supported vulnerability types: SQL injection, XSS, command injection, etc. (10 types)
+│   │   └── Supported languages: Python, JavaScript, Java, Go, PHP, C#
 │   └── call_chain_analyzer.py      # Call chain analyzer (taint propagation tracking)
-│       └── Functions: Build call graph, path finding, chain analysis
+│       ├── Functions: Build call graph, path finding, chain analysis
+│       └── Enhanced: Variable tracking, data flow analysis, taint propagation
 │
 ├── generators/                     # Generator modules
 │   ├── __init__.py
 │   └── poc_generator.py            # PoC generator (vulnerability verification code)
-│       └── Supported languages: Python, JavaScript, Java, Go, PHP
+│       └── Supported languages: Python, JavaScript, Java, Go, PHP, C#
 │
 ├── reports/                        # Report modules
 │   ├── __init__.py
@@ -110,7 +113,7 @@ code_audit_tool/
 │   ├── sources/                    # Source rules (HTTP entry points)
 │   │   ├── __init__.py
 │   │   └── source_patterns.py      # Framework routing pattern definitions
-│   │       └── Contains routing patterns for 6 frameworks
+│   │       └── Contains routing patterns for 9 frameworks
 │   └── vulnerabilities/            # Detailed vulnerability rules
 │       ├── __init__.py
 │       ├── README.md               # Vulnerability rules documentation
@@ -146,17 +149,32 @@ code_audit_tool/
 #### 1. Core Layer
 Responsible for overall coordination and configuration management:
 - **config.py**: Defines all data structures (SourcePoint, SinkPoint, CallChain, Vulnerability, PoC, AuditResult), loads and manages rule libraries
+  - Framework enums: Flask, Django, FastAPI, Express, Spring, Gin, Laravel, Symfony, ASPNET
+  - File extensions: .py, .js, .ts, .java, .go, .php, .rb, .jsp, .asp, .aspx, .cs, .cshtml
 - **audit_engine.py**: Main audit engine, coordinates analyzers, executes forward/reverse audits, analyzes attack chains
 
 #### 2. Analyzer Layer
 Responsible for static code analysis and vulnerability detection:
 - **source_analyzer.py**: Uses AST parsing and regex matching to identify HTTP entry points (routes, controllers)
+  - Python frameworks: Flask, Django, FastAPI
+  - JavaScript frameworks: Express
+  - Java frameworks: Spring
+  - Go frameworks: Gin
+  - PHP frameworks: Laravel, Symfony
+  - C# frameworks: ASP.NET Core
 - **sink_analyzer.py**: Identifies dangerous function calls, marks potential Sink points
+  - Supported languages: Python, JavaScript, Java, Go, PHP, C#
+  - Vulnerability types: SQL injection, command injection, path traversal, SSRF, XSS, deserialization, code injection, XXE, LDAP injection, open redirect
+  - Sanitization detection: Automatically identifies sanitization function calls, reduces severity of sanitized vulnerabilities
 - **call_chain_analyzer.py**: Builds call graphs, analyzes taint propagation paths, constructs Source→Sink call chains
+  - Variable tracking: Track variable definition, assignment, reference
+  - Data flow analysis: Analyze data passing between functions
+  - Taint propagation: Track user input to dangerous function propagation paths
 
 #### 3. Generator Layer
 Responsible for generating vulnerability verification code:
 - **poc_generator.py**: Automatically generates executable PoC verification code based on vulnerability type and call chain
+  - Supported languages: Python, JavaScript, Java, Go, PHP, C#
 
 #### 4. Report Layer
 Responsible for generating multi-format security reports:
@@ -165,7 +183,7 @@ Responsible for generating multi-format security reports:
 #### 5. Rule Library
 Stores all detection rules:
 - **sinks/**: Dangerous function rules (Sink points)
-- **sources/**: HTTP entry point rules (Source points)
+- **sources/**: HTTP entry point rules (Source points), supports 9 frameworks
 - **vulnerabilities/**: Detailed vulnerability rules (descriptions, CWE, remediation, etc.)
 
 #### 6. Template Layer

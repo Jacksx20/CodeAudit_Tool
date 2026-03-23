@@ -191,6 +191,10 @@ class CallChainAnalyzer:
                 self._build_java_call_graph(target_path)
             elif ext == '.go':
                 self._build_go_call_graph(target_path)
+            elif ext == '.php':
+                self._build_php_call_graph(target_path)
+            elif ext == '.cs':
+                self._build_cs_call_graph(target_path)
         else:
             # 遍历所有文件
             for root, dirs, files in os.walk(target_path):
@@ -208,6 +212,10 @@ class CallChainAnalyzer:
                         self._build_java_call_graph(file_path)
                     elif ext == '.go':
                         self._build_go_call_graph(file_path)
+                    elif ext == '.php':
+                        self._build_php_call_graph(file_path)
+                    elif ext == '.cs':
+                        self._build_cs_call_graph(file_path)
     
     def _build_python_call_graph(self, file_path: str):
         """构建Python文件的调用图 - 增强版，包含变量追踪"""
@@ -449,8 +457,23 @@ class CallChainAnalyzer:
     def _node_to_string(self, node) -> str:
         """将AST节点转换为字符串"""
         try:
-            return ast.unparse(node)
-        except:
+            # Python 3.9+ 支持 ast.unparse
+            if hasattr(ast, 'unparse'):
+                return ast.unparse(node)
+            # 对于旧版本，使用手动转换
+            if isinstance(node, ast.Name):
+                return node.id
+            elif isinstance(node, ast.Attribute):
+                value_str = self._node_to_string(node.value)
+                return f"{value_str}.{node.attr}" if value_str else node.attr
+            elif isinstance(node, ast.Constant):
+                return repr(node.value) if hasattr(node, 'value') else ''
+            elif isinstance(node, ast.Str):
+                return repr(node.s)
+            elif isinstance(node, ast.Num):
+                return str(node.n)
+            return ""
+        except Exception:
             return ""
     
     def get_tainted_variables(self, func_key: str) -> Set[str]:
@@ -577,6 +600,79 @@ class CallChainAnalyzer:
                     if call_name not in ['if', 'for', 'switch', 'func', 'go', 'defer']:
                         calls.append(call_name)
                 self.call_graph[func_key] = calls
+    
+    def _build_php_call_graph(self, file_path: str):
+        """构建PHP文件的调用图"""
+        try:
+            with open(file_path, 'r', encoding='utf-8', errors='ignore') as f:
+                content = f.read()
+        except Exception:
+            return
+        
+        # 查找函数定义
+        func_patterns = [
+            r'function\s+(\w+)\s*\(',  # 普通函数
+            r'public\s+function\s+(\w+)\s*\(',  # 公共方法
+            r'private\s+function\s+(\w+)\s*\(',  # 私有方法
+            r'protected\s+function\s+(\w+)\s*\(',  # 保护方法
+        ]
+        
+        for pattern in func_patterns:
+            for match in re.finditer(pattern, content):
+                func_name = match.group(1)
+                line_num = content[:match.start()].count('\n') + 1
+                func_key = f"{file_path}:{func_name}"
+                self.function_definitions[func_key] = (file_path, line_num, [])
+        
+        # 查找函数调用
+        call_patterns = [
+            r'(\w+)\s*\(',  # 普通函数调用
+            r'->(\w+)\s*\(',  # 方法调用
+            r'::(\w+)\s*\(',  # 静态方法调用
+        ]
+        
+        for func_key in self.function_definitions:
+            if func_key.startswith(file_path):
+                calls = []
+                for pattern in call_patterns:
+                    for match in re.finditer(pattern, content):
+                        call_name = match.group(1)
+                        if call_name not in ['if', 'for', 'while', 'switch', 'foreach', 'function', 'class', 'public', 'private', 'protected']:
+                            calls.append(call_name)
+                self.call_graph[func_key] = list(set(calls))  # 去重
+    
+    def _build_cs_call_graph(self, file_path: str):
+        """构建C#文件的调用图"""
+        try:
+            with open(file_path, 'r', encoding='utf-8', errors='ignore') as f:
+                content = f.read()
+        except Exception:
+            return
+        
+        # 查找方法定义
+        method_pattern = r'(?:public|private|protected|internal|static)\s+(?:async\s+)?(?:\w+(?:<[^>]+>)?)\s+(\w+)\s*\('
+        
+        for match in re.finditer(method_pattern, content):
+            method_name = match.group(1)
+            line_num = content[:match.start()].count('\n') + 1
+            func_key = f"{file_path}:{method_name}"
+            self.function_definitions[func_key] = (file_path, line_num, [])
+        
+        # 查找方法调用
+        call_patterns = [
+            r'\.(\w+)\s*\(',  # 实例方法调用
+            r'(\w+)\s*\(',  # 静态方法调用
+        ]
+        
+        for func_key in self.function_definitions:
+            if func_key.startswith(file_path):
+                calls = []
+                for pattern in call_patterns:
+                    for match in re.finditer(pattern, content):
+                        call_name = match.group(1)
+                        if call_name not in ['if', 'for', 'while', 'switch', 'foreach', 'using', 'try', 'catch', 'finally', 'lock']:
+                            calls.append(call_name)
+                self.call_graph[func_key] = list(set(calls))  # 去重
     
     def _build_reverse_call_graph(self):
         """构建反向调用图"""

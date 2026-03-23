@@ -756,6 +756,6 @@ For questions and suggestions, please open an issue on GitHub.
 
 ---
 
-**Version**: 1.0.2
-**Last Updated**: 2026-03-19
+**Version**: 1.2.0
+**Last Updated**: 2026-03-22
 **Status**: Stable ✅

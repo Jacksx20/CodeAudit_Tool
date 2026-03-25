@@ -123,6 +123,19 @@ CodeAudit_Tool/
 │       ├── path_traversal.json     # 路径遍历规则
 │       └── deserialization.json    # 反序列化规则
 │
+├── web/                            # Web应用模块 (v1.3.0新增)
+│   ├── app.py                      # Flask主应用
+│   ├── llm_analyzer.py             # 大模型分析器
+│   ├── templates/                  # Web模板
+│   │   └── index.html              # 主页面模板
+│   ├── static/                     # 静态资源
+│   │   ├── css/
+│   │   │   └── style.css           # 样式文件
+│   │   └── js/
+│   │       └── app.js              # 前端交互逻辑
+│   ├── uploads/                    # 上传文件目录
+│   └── results/                    # 审计结果目录
+│
 ├── templates/                      # 报告模板
 │   ├── html/
 │   │   └── report_template.html    # HTML报告模板（可视化）
@@ -135,6 +148,9 @@ CodeAudit_Tool/
 │   ├── test_vulnerable_app.py      # 漏洞测试样本
 │   └── test_audit.py               # 自动化测试脚本
 │
+├── run_web.bat                     # Windows启动脚本 (v1.3.0新增)
+├── run_web.sh                      # Linux/Mac启动脚本 (v1.3.0新增)
+├── .env.example                    # 环境变量配置模板 (v1.3.0新增)
 └── README.md                       # 项目文档
 ```
 
@@ -539,6 +555,78 @@ MIT License
 ---
 
 ## 更新日志
+
+### v1.3.0 (2026-03-24)
+
+#### 新增功能
+- ✨ **新增Web界面支持**
+  - 基于Flask的现代化Web界面
+  - 支持文件拖拽上传和点击上传
+  - 支持ZIP压缩包和单个源代码文件上传
+  - 实时显示审计进度和状态
+  - 可视化漏洞展示和详情查看
+  - 支持多格式报告下载(JSON/HTML/Markdown)
+  - 历史记录查看功能
+  - 暗色主题,响应式设计
+
+- ✨ **新增大模型增强分析**
+  - 支持手动配置大模型API
+  - 可选启用大模型增强分析
+  - 支持OpenAI API及兼容服务
+  - 提供漏洞深度分析
+  - 生成安全总结和风险评估
+  - 提供具体修复建议和代码示例
+  - 支持多种模型选择(GPT-4/GPT-3.5等)
+  - 支持自定义模型配置
+
+#### 优化改进
+- 🔧 **改进大模型配置方式**
+  - 从环境变量配置改为Web界面手动配置
+  - 用户可直接在界面上输入API Key
+  - 支持自定义API Base URL
+  - 支持模型选择和自定义
+  - 配置信息仅在当前会话使用,更安全
+
+- 🔧 **增强Web应用功能**
+  - 支持动态大模型配置
+  - 改进错误处理和用户提示
+  - 优化前端交互体验
+  - 添加配置验证功能
+
+#### 技术改进
+- ⚡ 新增 `web/app.py` Flask主应用
+- ⚡ 新增 `web/llm_analyzer.py` 大模型分析器
+- ⚡ 新增 `web/templates/index.html` Web界面模板
+- ⚡ 新增 `web/static/css/style.css` 样式文件
+- ⚡ 新增 `web/static/js/app.js` 前端交互逻辑
+- ⚡ 新增 `run_web.bat` 和 `run_web.sh` 启动脚本
+- ⚡ 更新 `requirements.txt` 添加Web依赖
+
+#### 文档更新
+- 📝 新增 `WEB_README.md` Web应用使用文档
+- 📝 新增 `WEB_QUICKSTART.md` 快速启动指南
+- 📝 新增 `LLM_CONFIG_GUIDE.md` 大模型配置指南
+- 📝 新增 `LLM_MANUAL_CONFIG.md` 手动配置说明
+- 📝 新增 `BUGFIX_COMPLETE.md` Bug修复报告
+
+#### Web应用功能
+- ✅ 文件上传(支持ZIP和单文件)
+- ✅ 自动代码审计
+- ✅ 漏洞检测(10种类型)
+- ✅ 调用链分析
+- ✅ 攻击链分析
+- ✅ 大模型增强分析(可选)
+- ✅ 多格式报告生成
+- ✅ 历史记录查看
+- ✅ 现代化Web界面
+
+#### 大模型支持
+- ✅ OpenAI GPT-4/GPT-3.5
+- ✅ Azure OpenAI
+- ✅ 其他兼容OpenAI API的服务
+- ✅ 自定义模型支持
+
+---
 
 ### v1.2.0 (2026-03-22)
 

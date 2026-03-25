@@ -1,0 +1,191 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>CodeAudit - 代码安全审计工具</title>
+    <link rel="stylesheet" href="/static/css/style.css">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/highlight.js@11.9.0/styles/github-dark.min.css">
+    <script src="https://cdn.jsdelivr.net/npm/highlight.js@11.9.0/lib/highlight.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
+</head>
+<body>
+    <div class="container">
+        <!-- 头部 -->
+        <header class="header">
+            <div class="logo">
+                <i class="fas fa-shield-alt"></i>
+                <h1>CodeAudit</h1>
+            </div>
+            <div class="subtitle">代码安全审计工具 - 自动化漏洞检测与修复建议</div>
+            <div class="llm-status" id="llmStatus">
+                <i class="fas fa-robot"></i>
+                <span>大模型增强: <span id="llmStatusText">检测中...</span></span>
+            </div>
+        </header>
+
+        <!-- 主要内容 -->
+        <main class="main-content">
+            <!-- 上传区域 -->
+            <section class="upload-section" id="uploadSection">
+                <div class="upload-card">
+                    <div class="upload-icon">
+                        <i class="fas fa-cloud-upload-alt"></i>
+                    </div>
+                    <h2>上传代码进行审计</h2>
+                    <p class="upload-hint">支持 ZIP压缩包 或 单个源代码文件</p>
+                    <p class="upload-formats">支持格式: .py, .js, .java, .go, .php, .cs, .ts, .rb, .jsp, .asp, .aspx, .cshtml</p>
+
+                    <div class="upload-area" id="uploadArea">
+                        <input type="file" id="fileInput" accept=".zip,.py,.js,.java,.go,.php,.cs,.ts,.rb,.jsp,.asp,.aspx,.cshtml">
+                        <div class="upload-placeholder">
+                            <i class="fas fa-file-code"></i>
+                            <p>拖拽文件到此处或点击选择</p>
+                        </div>
+                    </div>
+
+                    <div class="upload-options">
+                        <label class="checkbox-label">
+                            <input type="checkbox" id="enableLlm">
+                            <span>启用大模型增强分析</span>
+                        </label>
+                        <label class="checkbox-label">
+                            <input type="checkbox" id="enableForward" checked>
+                            <span>正向审计</span>
+                        </label>
+                        <label class="checkbox-label">
+                            <input type="checkbox" id="enableReverse" checked>
+                            <span>反向审计</span>
+                        </label>
+                        <label class="checkbox-label">
+                            <input type="checkbox" id="enableAttackChain" checked>
+                            <span>攻击链分析</span>
+                        </label>
+                    </div>
+
+                    <!-- 大模型配置区域 -->
+                    <div class="llm-config-section" id="llmConfigSection" style="display: none;">
+                        <h3><i class="fas fa-cog"></i> 大模型配置</h3>
+                        <div class="config-form">
+                            <div class="form-group">
+                                <label for="apiKey">API Key <span class="required">*</span></label>
+                                <input type="password" id="apiKey" class="form-input" placeholder="请输入您的API密钥">
+                                <small class="form-hint">支持OpenAI API或兼容服务</small>
+                            </div>
+                            <div class="form-group">
+                                <label for="apiBaseUrl">API Base URL</label>
+                                <input type="text" id="apiBaseUrl" class="form-input" value="https://api.openai.com/v1" placeholder="https://api.openai.com/v1">
+                                <small class="form-hint">默认使用OpenAI API,可修改为其他兼容服务</small>
+                            </div>
+                            <div class="form-group">
+                                <label for="modelName">模型选择</label>
+                                <select id="modelName" class="form-select">
+                                    <option value="gpt-4">GPT-4 (推荐)</option>
+                                    <option value="gpt-4-turbo-preview">GPT-4 Turbo</option>
+                                    <option value="gpt-3.5-turbo">GPT-3.5 Turbo</option>
+                                    <option value="gpt-3.5-turbo-16k">GPT-3.5 Turbo 16K</option>
+                                    <option value="custom">自定义模型</option>
+                                </select>
+                            </div>
+                            <div class="form-group" id="customModelGroup" style="display: none;">
+                                <label for="customModel">自定义模型名称</label>
+                                <input type="text" id="customModel" class="form-input" placeholder="输入自定义模型名称">
+                            </div>
+                        </div>
+                    </div>
+
+                    <button class="btn btn-primary btn-large" id="startAuditBtn" disabled>
+                        <i class="fas fa-search"></i> 开始审计
+                    </button>
+                </div>
+            </section>
+
+            <!-- 文件信息 -->
+            <section class="file-info-section" id="fileInfoSection" style="display: none;">
+                <div class="file-info-card">
+                    <h3><i class="fas fa-file-alt"></i> 文件信息</h3>
+                    <div class="file-stats" id="fileStats"></div>
+                </div>
+            </section>
+
+            <!-- 审计进度 -->
+            <section class="progress-section" id="progressSection" style="display: none;">
+                <div class="progress-card">
+                    <h3><i class="fas fa-spinner fa-spin"></i> 审计进行中...</h3>
+                    <div class="progress-bar">
+                        <div class="progress-fill" id="progressFill"></div>
+                    </div>
+                    <div class="progress-text" id="progressText">正在分析代码...</div>
+                </div>
+            </section>
+
+            <!-- 审计结果 -->
+            <section class="result-section" id="resultSection" style="display: none;">
+                <!-- 摘要卡片 -->
+                <div class="summary-cards" id="summaryCards"></div>
+
+                <!-- 漏洞列表 -->
+                <div class="vulnerabilities-section">
+                    <h3><i class="fas fa-bug"></i> 漏洞详情</h3>
+                    <div class="vuln-filters">
+                        <button class="filter-btn active" data-filter="all">全部</button>
+                        <button class="filter-btn" data-filter="critical">Critical</button>
+                        <button class="filter-btn" data-filter="high">High</button>
+                        <button class="filter-btn" data-filter="medium">Medium</button>
+                        <button class="filter-btn" data-filter="low">Low</button>
+                    </div>
+                    <div class="vulnerabilities-list" id="vulnerabilitiesList"></div>
+                </div>
+
+                <!-- 大模型分析 -->
+                <div class="llm-analysis-section" id="llmAnalysisSection" style="display: none;">
+                    <h3><i class="fas fa-robot"></i> 大模型安全分析</h3>
+                    <div class="llm-content" id="llmContent"></div>
+                </div>
+
+                <!-- 攻击链 -->
+                <div class="attack-chains-section" id="attackChainsSection" style="display: none;">
+                    <h3><i class="fas fa-link"></i> 攻击链分析</h3>
+                    <div class="attack-chains-list" id="attackChainsList"></div>
+                </div>
+
+                <!-- 报告下载 -->
+                <div class="reports-section">
+                    <h3><i class="fas fa-download"></i> 下载报告</h3>
+                    <div class="report-buttons">
+                        <button class="btn btn-secondary" id="downloadJson">
+                            <i class="fas fa-file-code"></i> JSON报告
+                        </button>
+                        <button class="btn btn-secondary" id="downloadHtml">
+                            <i class="fas fa-file-alt"></i> HTML报告
+                        </button>
+                        <button class="btn btn-secondary" id="downloadMd">
+                            <i class="fab fa-markdown"></i> Markdown报告
+                        </button>
+                    </div>
+                </div>
+            </section>
+        </main>
+
+        <!-- 历史记录 -->
+        <aside class="history-sidebar" id="historySidebar">
+            <h3><i class="fas fa-history"></i> 历史记录</h3>
+            <div class="history-list" id="historyList"></div>
+        </aside>
+    </div>
+
+    <!-- 漏洞详情模态框 -->
+    <div class="modal" id="vulnModal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h3 id="modalTitle"></h3>
+                <button class="modal-close" onclick="closeModal()">&times;</button>
+            </div>
+            <div class="modal-body" id="modalBody"></div>
+        </div>
+    </div>
+
+    <script src="/static/js/app.js"></script>
+</body>
+</html>
